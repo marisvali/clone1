@@ -12,8 +12,14 @@ type World struct {
 	BrickPixelSize  int
 	MarginPixelSize int
 	Bricks          []Brick
-	Dragging        int
+	Dragging        *Brick
 	DraggingOrigin  Pt
+}
+
+type PlayerInput struct {
+	Pos          Pt
+	JustPressed  bool
+	JustReleased bool
 }
 
 func NewWorld() (w World) {
@@ -37,7 +43,7 @@ func NewWorld() (w World) {
 		PosMat:    Pt{5, 1},
 		PosPixels: w.MatPosToPixelsPos(Pt{5, 1}),
 	})
-	w.Dragging = -1
+	w.Dragging = nil
 	return w
 }
 
@@ -54,6 +60,38 @@ func (w *World) MatPosToPixelsPos(matPos Pt) (pixelPos Pt) {
 	return
 }
 
-func (w *World) Step() {
+func (w *World) Step(input PlayerInput) {
+	if input.JustPressed {
+		// It should not be possible to be dragging anything already.
+		if w.Dragging != nil {
+			panic("wrong!")
+		}
 
+		// Check if there's any brick under the click.
+		for i := range w.Bricks {
+			p := w.Bricks[i].PosPixels
+			brickSize := Pt{w.BrickPixelSize, w.BrickPixelSize}
+			r := Rectangle{p, p.Plus(brickSize)}
+			if r.ContainsPt(input.Pos) {
+				w.Dragging = &w.Bricks[i]
+				w.DraggingOrigin = input.Pos
+				break
+			}
+		}
+	}
+
+	if input.JustReleased {
+		if w.Dragging != nil {
+			// Reset dragged brick's position.
+			w.Dragging.PosPixels = w.MatPosToPixelsPos(w.Dragging.PosMat)
+		}
+		w.Dragging = nil
+	}
+
+	if w.Dragging != nil {
+		// Update dragged brick's position.
+		offset := input.Pos.Minus(w.DraggingOrigin)
+		w.Dragging.PosPixels = w.MatPosToPixelsPos(w.Dragging.PosMat).
+			Plus(offset)
+	}
 }
