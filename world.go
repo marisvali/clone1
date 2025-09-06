@@ -267,66 +267,55 @@ func (w *World) ComputeDraggedBrickPosition(input PlayerInput) Pt {
 	// travel the rest of the pixels we have left either on X or on Y.
 	nPixelsLeft := nMaxPixels - i
 
-	// Move towards the target X until we reach the target X, or finish the
-	// pixels we have left or we hit another obstacle.
-	if lastValidPos.X != targetPos.X {
-		pos := lastValidPos
-		incX := 1
-		if pos.X > targetPos.X {
-			incX = -1
-		}
-		for {
-			pos.X += incX
-			brick := Rectangle{pos, pos.Plus(brickSize)}
-			if RectIntersectsRects(brick, obstacles) {
-				// If we hit an obstacle after the first movement, we should try to
-				// move on Y.
-				if lastValidPos == pts[i-1] {
-					break
+	// Try to move on both X and Y until the target X or Y is reached, or we
+	// have travelled all the pixels we have left, or we can no longer move on
+	// X or Y. We expect to only be able to move on X or Y, not both at once,
+	// but we don't know which one at the start.
+	incX := 1
+	if lastValidPos.X > targetPos.X {
+		incX = -1
+	}
+	incY := 1
+	if lastValidPos.Y > targetPos.Y {
+		incY = -1
+	}
+	canMoveOnX := true
+	canMoveOnY := true
+	for {
+		if canMoveOnX {
+			if lastValidPos.X == targetPos.X {
+				canMoveOnX = false
+			} else {
+				pos := lastValidPos.Plus(Pt{incX, 0})
+				brick := Rectangle{pos, pos.Plus(brickSize)}
+				if RectIntersectsRects(brick, obstacles) {
+					canMoveOnX = false
 				} else {
-					return lastValidPos
+					lastValidPos = pos
 				}
 			}
-			// If we got here, we had at least one valid movement on X, which
-			// means further movement on Y is out of the question.
-			lastValidPos = pos
-			nPixelsLeft--
-			if nPixelsLeft == 0 {
-				return lastValidPos
+		}
+		if canMoveOnY {
+			if lastValidPos.Y == targetPos.Y {
+				canMoveOnY = false
+			} else {
+				pos := lastValidPos.Plus(Pt{0, incY})
+				brick := Rectangle{pos, pos.Plus(brickSize)}
+				if RectIntersectsRects(brick, obstacles) {
+					canMoveOnY = false
+				} else {
+					lastValidPos = pos
+				}
 			}
-			if pos.X == targetPos.X {
-				return lastValidPos
-			}
+		}
+		nPixelsLeft--
+		if nPixelsLeft == 0 {
+			return lastValidPos
+		}
+		if !canMoveOnX && !canMoveOnY {
+			return lastValidPos
 		}
 	}
-
-	// Move towards the target Y until we reach the target Y, or finish the
-	// pixels we have left or we hit another obstacle.
-	if lastValidPos.Y != targetPos.Y {
-		pos := lastValidPos
-		incY := 1
-		if pos.Y > targetPos.Y {
-			incY = -1
-		}
-		for {
-			pos.Y += incY
-			brick := Rectangle{pos, pos.Plus(brickSize)}
-			if RectIntersectsRects(brick, obstacles) {
-				return lastValidPos
-			}
-			// If we got here, we had at least one valid movement on X, which
-			// means further movement on Y is out of the question.
-			lastValidPos = pos
-			nPixelsLeft--
-			if nPixelsLeft == 0 {
-				return lastValidPos
-			}
-			if pos.Y == targetPos.Y {
-				return lastValidPos
-			}
-		}
-	}
-	return lastValidPos
 }
 
 func (w *World) BrickBounds(b Brick) (r Rectangle) {
