@@ -93,6 +93,15 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 		// 	})
 	}
 
+	for _, pt := range g.world.DebugPts {
+		DrawPixel(play, pt, color.NRGBA{
+			R: 255,
+			G: 0,
+			B: 0,
+			A: 255,
+		})
+	}
+
 	g.drawText(screen, fmt.Sprintf("ActualTPS: %f", ebiten.ActualTPS()), false,
 		false,
 		color.NRGBA{

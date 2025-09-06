@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"image"
+	"image/color"
 )
 
 // DrawSprite draws img on screen.
@@ -51,4 +52,14 @@ func SubImage(screen *ebiten.Image, r image.Rectangle) *ebiten.Image {
 	r.Min = r.Min.Add(minPt)
 	r.Max = r.Max.Add(minPt)
 	return screen.SubImage(r).(*ebiten.Image)
+}
+
+func DrawPixel(screen *ebiten.Image, pt Pt, color color.Color) {
+	size := 2
+	m := screen.Bounds().Min
+	for ax := pt.X - size; ax <= pt.X+size; ax++ {
+		for ay := pt.Y - size; ay <= pt.Y+size; ay++ {
+			screen.Set(m.X+ax, m.Y+ay, color)
+		}
+	}
 }
