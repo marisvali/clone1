@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 type Line struct {
 	Start Pt
 	End   Pt
@@ -82,91 +84,106 @@ func (r *Rectangle) Intersects(other Rectangle) bool {
 	return minX1 < maxX2 && maxX1 > minX2 && minY1 < maxY2 && maxY1 > minY2
 }
 
+// linePointsBufferSize is an arbitrary limit for GetLinePoints. Change its
+// value to accommodate your needs. The only concern is to have something that
+// doesn't eat up RAM unnecessarily but is good enough for everything the game
+// needs.
+const linePointsBufferSize = 10000
+
+// linePointsBuffer is a buffer allocated only once and reused by GetLinePoints.
+var linePointsBuffer = make([]Pt, linePointsBufferSize)
+
 // GetLinePoints computes a list of points that lie between the start and end
 // of a line. The points all have integer coordinates and they are continuous
 // (pixel k touches pixel k-1). This algorithm is useful if you want to draw a
 // line on a bitmap, for example. Mathematically speaking, there is an infinite
 // number of points on a line, and their coordinates are almost always not
 // integers. So we need to decide which pixels best approximate the actual line.
+// GetLinePoints does the standard approximation that you might see in something
+// like Windows Paint.
 // Important: the points are ordered and go from line start to line end.
-func GetLinePoints(l Line) (pts []Pt) {
-	x1 := l.Start.X
-	y1 := l.Start.Y
-	x2 := l.End.X
-	y2 := l.End.Y
-
-	dx := x2 - x1
-	dy := y2 - y1
-	if dx == 0 && dy == 0 {
-		pts = append(pts, l.Start)
-		return
+func GetLinePoints(start Pt, end Pt, nMaxPts int) []Pt {
+	if nMaxPts > linePointsBufferSize {
+		panic(fmt.Errorf("got nMaxPts = %d but can only handle at most %d "+
+			"points", nMaxPts, linePointsBufferSize))
 	}
 
-	if Abs(dx) > Abs(dy) {
-		inc := dx / Abs(dx)
-		for x := x1; x != x2; x += inc {
-			y := y1 + (x-x1)*dy/dx
-			pts = append(pts, Pt{x, y})
-		}
-	} else {
-		inc := dy / Abs(dy)
-		for y := y1; y != y2; y += inc {
-			x := x1 + (y-y1)*dx/dy
-			pts = append(pts, Pt{x, y})
-		}
-	}
-	return
-}
-
-var buffer []Pt = make([]Pt, 100000)
-
-func GetLinePointsBuffered(l Line) []Pt {
 	n := 0
-
-	x1 := l.Start.X
-	y1 := l.Start.Y
-	x2 := l.End.X
-	y2 := l.End.Y
+	x1 := start.X
+	y1 := start.Y
+	x2 := end.X
+	y2 := end.Y
 
 	dx := x2 - x1
 	dy := y2 - y1
+	// Check if dx or dy are zero, to avoid division by zero further down the
+	// line.
 	if dx == 0 && dy == 0 {
-		buffer[n] = l.Start
+		// If start and end are the same, return a single point.
+		linePointsBuffer[n] = start
 		n++
-		return buffer[:n]
+		return linePointsBuffer[:n]
 	}
 
 	if Abs(dx) > Abs(dy) {
-		inc := dx / Abs(dx)
-		for x := x1; x != x2; x += inc {
+		// The line is longer on X than on Y. Then we need exactly one pixel for
+		// each X coordinate. What's left is to compute the corresponding Y for
+		// each X.
+		inc := dx / Abs(dx) // I use inc, which might be +1 or -1, because it is
+		// important for me to go from start to end, not just from min to max.
+		for x := x1; x != x2 && n < nMaxPts; x += inc {
+			// I intentionally don't compute dy/dx once and reuse it because
+			// that would mean doing floating point operations. I want to do
+			// only integer operations.
 			y := y1 + (x-x1)*dy/dx
-			buffer[n] = Pt{x, y}
+			linePointsBuffer[n] = Pt{x, y}
 			n++
 		}
 	} else {
+		// The comments for X apply here as well, with X and Y interchanged.
 		inc := dy / Abs(dy)
-		for y := y1; y != y2; y += inc {
+		for y := y1; y != y2 && n < nMaxPts; y += inc {
 			x := x1 + (y-y1)*dx/dy
-			buffer[n] = Pt{x, y}
+			linePointsBuffer[n] = Pt{x, y}
 			n++
 		}
 	}
-	return buffer[:n]
+	return linePointsBuffer[:n]
 }
 
-func MoveRectUntilBlockedByRects(r Rectangle, targetPos Pt,
-	nMaxPixels int, obstacles []Rectangle) (newPos Pt) {
+// RectIntersectsRects is a utility function that checks if a rectangle
+// intersects any of a list of rectangles.
+func RectIntersectsRects(r Rectangle, rects []Rectangle) bool {
+	for _, r2 := range rects {
+		if r.Intersects(r2) {
+			return true
+		}
+	}
+	return false
+}
 
+// MoveRect computes a rectangle newR the size of r as if r was moved in a
+// straight line towards targetPos until:
+// - it reached targetPos or
+// - it moved for nMaxPixels or
+// - it intersected an obstacle
+// The position of the rectangle is r.Corner1. If r can reach the targetPos,
+// then newR.Corner1 == targetPos.
+func MoveRect(r Rectangle, targetPos Pt, nMaxPixels int,
+	obstacles []Rectangle) (newR Rectangle, nPixelsLeft int) {
+
+	// Compute the pixels along the line from the start position to the target
+	// position. We do nMaxPixels+1 because the first pixel in the line is the
+	// current position, which we do not consider a movement.
+	pts := GetLinePoints(r.Corner1, targetPos, nMaxPixels+1)
+
+	// Move the rectangle pixel by pixel and check if it collides with any of
+	// the obstacles.
 	rSize := Pt{r.Width(), r.Height()}
-	lastValidPos := r.Corner1
 	var i int
-
-	// First, go as far as possible towards the target, in a straight line.
-	pts := GetLinePointsBuffered(Line{lastValidPos, targetPos})
-	nMaxPixels = Min(len(pts), nMaxPixels)
-	for i = 1; i < nMaxPixels; i++ {
-		newR := Rectangle{pts[i], pts[i].Plus(rSize)}
-		if RectIntersectsRects(newR, obstacles) {
+	for i = 1; i < len(pts); i++ {
+		r = Rectangle{pts[i], pts[i].Plus(rSize)}
+		if RectIntersectsRects(r, obstacles) {
 			break
 		}
 	}
@@ -174,126 +191,5 @@ func MoveRectUntilBlockedByRects(r Rectangle, targetPos Pt,
 	// At this point, pts[i-1] is the last valid position either because
 	// we reached the target, or we travelled the maximum number of pixels
 	// or we hit an obstacle at pt[i].
-	return pts[i-1]
-}
-
-func MoveRectTowardsTargetBlockedByRects(r Rectangle, targetPos Pt,
-	nMaxPixels int, obstacles []Rectangle) (newPos Pt) {
-
-	rSize := Pt{r.Width(), r.Height()}
-	lastValidPos := r.Corner1
-	var i int
-
-	// First, go as far as possible towards the target, in a straight line.
-	pts := GetLinePointsBuffered(Line{lastValidPos, targetPos})
-	nMaxPixels = Min(len(pts), nMaxPixels)
-	for i = 1; i < nMaxPixels; i++ {
-		newR := Rectangle{pts[i], pts[i].Plus(rSize)}
-		if RectIntersectsRects(newR, obstacles) {
-			break
-		}
-	}
-
-	// At this point, pts[i-1] is the last valid position either because
-	// we reached the target, or we travelled the maximum number of pixels
-	// or we hit an obstacle at pt[i].
-	lastValidPos = pts[i-1]
-
-	// Now, go towards the target's X as much as possible.
-	pts = GetLinePointsBuffered(Line{lastValidPos, Pt{targetPos.X, lastValidPos.Y}})
-
-	nMaxPixels = Min(len(pts), nMaxPixels)
-	for i = 1; i < nMaxPixels; i++ {
-		newR := Rectangle{pts[i], pts[i].Plus(rSize)}
-		if RectIntersectsRects(newR, obstacles) {
-			break
-		}
-	}
-	lastValidPos = pts[i-1]
-
-	// Now, go towards the target's Y as much as possible.
-	pts = GetLinePointsBuffered(Line{lastValidPos, Pt{lastValidPos.X, targetPos.Y}})
-	nMaxPixels = Min(len(pts), nMaxPixels)
-	for i = 1; i < nMaxPixels; i++ {
-		newR := Rectangle{pts[i], pts[i].Plus(rSize)}
-		if RectIntersectsRects(newR, obstacles) {
-			break
-		}
-	}
-	lastValidPos = pts[i-1]
-	return lastValidPos
-}
-
-func MoveRectTowardsTargetBlockedByRects2(r Rectangle, targetPos Pt,
-	nMaxPixels int, obstacles []Rectangle) (newPos Pt) {
-
-	brickSize := Pt{r.Width(), r.Height()}
-	lastValidPos := r.Corner1
-	var i int
-
-	// First, go as far as possible towards the target, in a straight line.
-	pts := GetLinePoints(Line{lastValidPos, targetPos})
-	nMaxPixels = Min(len(pts), nMaxPixels)
-	for i = 1; i < nMaxPixels; i++ {
-		newR := Rectangle{pts[i], pts[i].Plus(brickSize)}
-		if RectIntersectsRects(newR, obstacles) {
-			break
-		}
-	}
-
-	// At this point, pts[i-1] is the last valid position either because
-	// we reached the target, or we travelled the maximum number of pixels
-	// or we hit an obstacle at pt[i].
-	lastValidPos = pts[i-1]
-	nPixelsLeft := nMaxPixels - i
-
-	// Try to move on both X and Y until the target X or Y is reached, or we
-	// have travelled all the pixels we have left, or we can no longer move on
-	// X or Y. We expect to only be able to move on X or Y, not both at once,
-	// but we don't know which one at the start.
-	incX := 1
-	if lastValidPos.X > targetPos.X {
-		incX = -1
-	}
-	incY := 1
-	if lastValidPos.Y > targetPos.Y {
-		incY = -1
-	}
-	canMoveOnX := true
-	canMoveOnY := true
-	for {
-		if canMoveOnX {
-			if lastValidPos.X == targetPos.X {
-				canMoveOnX = false
-			} else {
-				pos := lastValidPos.Plus(Pt{incX, 0})
-				brick := Rectangle{pos, pos.Plus(brickSize)}
-				if RectIntersectsRects(brick, obstacles) {
-					canMoveOnX = false
-				} else {
-					lastValidPos = pos
-				}
-			}
-		}
-		if canMoveOnY {
-			if lastValidPos.Y == targetPos.Y {
-				canMoveOnY = false
-			} else {
-				pos := lastValidPos.Plus(Pt{0, incY})
-				brick := Rectangle{pos, pos.Plus(brickSize)}
-				if RectIntersectsRects(brick, obstacles) {
-					canMoveOnY = false
-				} else {
-					lastValidPos = pos
-				}
-			}
-		}
-		nPixelsLeft--
-		if nPixelsLeft == 0 {
-			return lastValidPos
-		}
-		if !canMoveOnX && !canMoveOnY {
-			return lastValidPos
-		}
-	}
+	return Rectangle{pts[i-1], pts[i-1].Plus(rSize)}, nMaxPixels - i + 1
 }

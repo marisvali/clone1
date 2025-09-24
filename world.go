@@ -171,7 +171,8 @@ func (w *World) Step(input PlayerInput) {
 			target := b.PosPixels.Plus(Pt{0, 900})
 			obstacles := w.GetObstacles(b)
 			bRect := w.BrickBounds(*b)
-			b.PosPixels = MoveRectUntilBlockedByRects(bRect, target, 10, obstacles)
+			newR, _ := MoveRect(bRect, target, 10, obstacles)
+			b.PosPixels = newR.Corner1
 		}
 	}
 
@@ -185,15 +186,6 @@ func (w *World) Step(input PlayerInput) {
 			}
 		}
 	}
-}
-
-func RectIntersectsRects(r Rectangle, rects []Rectangle) bool {
-	for _, r2 := range rects {
-		if r.Intersects(r2) {
-			return true
-		}
-	}
-	return false
 }
 
 func (w *World) ComputeDraggedBrickPosition(input PlayerInput) Pt {
@@ -235,7 +227,21 @@ func (w *World) ComputeDraggedBrickPosition(input PlayerInput) Pt {
 	// First, get the set of rectangles the brick must not intersect.
 	obstacles := w.GetObstacles(w.Dragging)
 	brick := w.BrickBounds(*w.Dragging)
-	return MoveRectTowardsTargetBlockedByRects(brick, targetPos, 40, obstacles)
+
+	nMaxPixels := 100
+
+	// First, go as far as possible towards the target, in a straight line.
+	brick, nMaxPixels = MoveRect(brick, targetPos, nMaxPixels, obstacles)
+
+	// Now, go towards the target's X as much as possible.
+	brick, nMaxPixels = MoveRect(brick, Pt{targetPos.X, brick.Corner1.Y},
+		nMaxPixels, obstacles)
+
+	// Now, go towards the target's X as much as possible.
+	brick, nMaxPixels = MoveRect(brick, Pt{brick.Corner1.X, targetPos.Y},
+		nMaxPixels, obstacles)
+
+	return brick.Corner1
 }
 
 func (w *World) BrickBounds(b Brick) (r Rectangle) {

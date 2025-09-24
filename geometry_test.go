@@ -1,17 +1,15 @@
 package main
 
-import "testing"
+import (
+	"testing"
+)
 
-// variant2:
-// BenchmarkWorldSpeed-12    	   19231	     62310 ns/op
-// variant3:
-// BenchmarkWorldSpeed-12    	   15909	     74798 ns/op
-// on variant 3 got 117000 ns/op -> 75202 ns/op for using GetLinePointsBuffered
-func BenchmarkWorldSpeed(b *testing.B) {
+// BenchmarkMoveRect-12    	   96234	     12439 ns/op
+func BenchmarkMoveRect(b *testing.B) {
 	brickSize := Pt{100, 100}
 
 	var brick Rectangle
-	brick.Corner1 = Pt{100, 800}
+	brick.Corner1 = Pt{10000, 800}
 	brick.Corner2 = brick.Corner1.Plus(brickSize)
 
 	obstacles := make([]Rectangle, 30)
@@ -25,6 +23,15 @@ func BenchmarkWorldSpeed(b *testing.B) {
 	nMaxPixels := 100
 
 	for b.Loop() {
-		MoveRectTowardsTargetBlockedByRects(brick, Pt{0, 0}, nMaxPixels, obstacles)
+		// If I put the code here directly instead of wrapped into a function,
+		// it gets optimized away for some reason.
+		f(brick, Pt{0, 0}, nMaxPixels, obstacles)
 	}
+}
+
+func f(r Rectangle, targetPos Pt, nMaxPixels int, obstacles []Rectangle) Rectangle {
+	r, nMaxPixels = MoveRect(r, targetPos, nMaxPixels, obstacles)
+	r, nMaxPixels = MoveRect(r, Pt{targetPos.X, r.Corner1.Y}, nMaxPixels, obstacles)
+	r, nMaxPixels = MoveRect(r, Pt{r.Corner1.X, targetPos.Y}, nMaxPixels, obstacles)
+	return r
 }
