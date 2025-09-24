@@ -118,7 +118,7 @@ func GetLinePoints(l Line) (pts []Pt) {
 	return
 }
 
-var buffer []Pt = make([]Pt, 1000)
+var buffer []Pt = make([]Pt, 100000)
 
 func GetLinePointsBuffered(l Line) []Pt {
 	n := 0
@@ -152,6 +152,29 @@ func GetLinePointsBuffered(l Line) []Pt {
 		}
 	}
 	return buffer[:n]
+}
+
+func MoveRectUntilBlockedByRects(r Rectangle, targetPos Pt,
+	nMaxPixels int, obstacles []Rectangle) (newPos Pt) {
+
+	rSize := Pt{r.Width(), r.Height()}
+	lastValidPos := r.Corner1
+	var i int
+
+	// First, go as far as possible towards the target, in a straight line.
+	pts := GetLinePointsBuffered(Line{lastValidPos, targetPos})
+	nMaxPixels = Min(len(pts), nMaxPixels)
+	for i = 1; i < nMaxPixels; i++ {
+		newR := Rectangle{pts[i], pts[i].Plus(rSize)}
+		if RectIntersectsRects(newR, obstacles) {
+			break
+		}
+	}
+
+	// At this point, pts[i-1] is the last valid position either because
+	// we reached the target, or we travelled the maximum number of pixels
+	// or we hit an obstacle at pt[i].
+	return pts[i-1]
 }
 
 func MoveRectTowardsTargetBlockedByRects(r Rectangle, targetPos Pt,
@@ -209,7 +232,7 @@ func MoveRectTowardsTargetBlockedByRects2(r Rectangle, targetPos Pt,
 	var i int
 
 	// First, go as far as possible towards the target, in a straight line.
-	pts := GetLinePointsBuffered(Line{lastValidPos, targetPos})
+	pts := GetLinePoints(Line{lastValidPos, targetPos})
 	nMaxPixels = Min(len(pts), nMaxPixels)
 	for i = 1; i < nMaxPixels; i++ {
 		newR := Rectangle{pts[i], pts[i].Plus(brickSize)}

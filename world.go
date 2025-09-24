@@ -19,8 +19,8 @@ import (
 // dragged brick away.
 
 type Brick struct {
-	Val       int
-	PosMat    Pt
+	Val int
+	// PosMat    Pt
 	PosPixels Pt
 }
 
@@ -31,7 +31,7 @@ type World struct {
 	MarginPixelSize int
 	Bricks          []Brick
 	Dragging        *Brick
-	DraggingOrigin  Pt
+	DraggingOffset  Pt
 	DebugPts        []Pt
 }
 
@@ -47,11 +47,20 @@ func NewWorld() (w World) {
 	w.MarginPixelSize = 30
 	w.BrickPixelSize = (playWidth - (w.MarginPixelSize * (w.NCols + 1))) / w.NCols
 
-	for y := 0; y < 4; y++ {
-		for x := 0; x < 6; x++ {
+	// for y := 0; y < 4; y++ {
+	// 	for x := 0; x < 6; x++ {
+	// 		w.Bricks = append(w.Bricks, Brick{
+	// 			Val:       3,
+	// 			PosMat:    Pt{x, y},
+	// 			PosPixels: w.MatPosToPixelsPos(Pt{x, y}),
+	// 		})
+	// 	}
+	// }
+	for y := 0; y < 1; y++ {
+		for x := 0; x < 3; x++ {
 			w.Bricks = append(w.Bricks, Brick{
-				Val:       3,
-				PosMat:    Pt{x, y},
+				Val: 3,
+				// PosMat:    Pt{x, y},
 				PosPixels: w.MatPosToPixelsPos(Pt{x, y}),
 			})
 		}
@@ -111,7 +120,7 @@ func (w *World) Step(input PlayerInput) {
 			r := Rectangle{p, p.Plus(brickSize)}
 			if r.ContainsPt(input.Pos) {
 				w.Dragging = &w.Bricks[i]
-				w.DraggingOrigin = input.Pos
+				w.DraggingOffset = p.Minus(input.Pos)
 				break
 			}
 		}
@@ -120,14 +129,61 @@ func (w *World) Step(input PlayerInput) {
 	if input.JustReleased {
 		if w.Dragging != nil {
 			// Reset dragged brick's position.
-			w.Dragging.PosMat = w.PixelsPosToMatPos(w.Dragging.PosPixels)
-			w.Dragging.PosPixels = w.MatPosToPixelsPos(w.Dragging.PosMat)
+			// w.Dragging.PosMat = w.PixelsPosToMatPos(w.Dragging.PosPixels)
+			w.Dragging.PosPixels = w.MatPosToPixelsPos(w.PixelsPosToMatPos(w.Dragging.PosPixels))
 		}
 		w.Dragging = nil
 	}
 
 	if w.Dragging != nil {
 		w.Dragging.PosPixels = w.ComputeDraggedBrickPosition(input)
+	}
+
+	// make bricks fall
+	for i := range w.Bricks {
+		// check which bricks are supposed to fall
+		b := &w.Bricks[i]
+		if b == w.Dragging {
+			continue
+		}
+		// check if there are any bricks under b
+		pixelPosOfClosestMatPos := w.MatPosToPixelsPos(w.PixelsPosToMatPos(b.PosPixels))
+		posUnder := w.PixelsPosToMatPos(b.PosPixels)
+		if pixelPosOfClosestMatPos == b.PosPixels {
+			posUnder.Subtract(Pt{0, 1})
+		}
+
+		if posUnder.Y < 0 {
+			continue
+		}
+		existsUnder := false
+		for j := range w.Bricks {
+			if i == j {
+				continue
+			}
+			if w.PixelsPosToMatPos(w.Bricks[j].PosPixels) == posUnder {
+				existsUnder = true
+				break
+			}
+		}
+		if !existsUnder {
+			// First, get the set of rectangles the brick must not intersect.
+			target := b.PosPixels.Plus(Pt{0, 900})
+			obstacles := w.GetObstacles(b)
+			bRect := w.BrickBounds(*b)
+			b.PosPixels = MoveRectUntilBlockedByRects(bRect, target, 10, obstacles)
+		}
+	}
+
+	// check if we got in a bad state
+	{
+		for i := range w.Bricks {
+			obstacles := w.GetObstacles(&w.Bricks[i])
+			brick := w.BrickBounds(w.Bricks[i])
+			if RectIntersectsRects(brick, obstacles) {
+				println("got here")
+			}
+		}
 	}
 }
 
@@ -141,9 +197,8 @@ func RectIntersectsRects(r Rectangle, rects []Rectangle) bool {
 }
 
 func (w *World) ComputeDraggedBrickPosition(input PlayerInput) Pt {
-	offset := input.Pos.Minus(w.DraggingOrigin)
-	targetPos := w.MatPosToPixelsPos(w.Dragging.PosMat).
-		Plus(offset)
+	targetPos := input.Pos.Plus(w.DraggingOffset)
+	// targetPos := input.Pos
 
 	// The overall logic of the movement is this:
 	// - simulate the brick being dragged/moved towards the mouse position
@@ -178,9 +233,23 @@ func (w *World) ComputeDraggedBrickPosition(input PlayerInput) Pt {
 	// is an actual solid object in solid space on which forces are acting.
 
 	// First, get the set of rectangles the brick must not intersect.
-	obstacles := make([]Rectangle, 0, len(w.Bricks))
+	obstacles := w.GetObstacles(w.Dragging)
+	brick := w.BrickBounds(*w.Dragging)
+	return MoveRectTowardsTargetBlockedByRects(brick, targetPos, 40, obstacles)
+}
+
+func (w *World) BrickBounds(b Brick) (r Rectangle) {
+	r.Corner1 = b.PosPixels
+	r.Corner2 = b.PosPixels
+	r.Corner2.X += w.BrickPixelSize
+	r.Corner2.Y += w.BrickPixelSize
+	return
+}
+
+func (w *World) GetObstacles(exception *Brick) (obstacles []Rectangle) {
+	obstacles = make([]Rectangle, 0, len(w.Bricks))
 	for j := range w.Bricks {
-		if w.Dragging == &w.Bricks[j] {
+		if exception == &w.Bricks[j] {
 			continue
 		}
 		obstacles = append(obstacles, w.BrickBounds(w.Bricks[j]))
@@ -200,17 +269,5 @@ func (w *World) ComputeDraggedBrickPosition(input PlayerInput) Pt {
 	obstacles = append(obstacles, topRect)
 	obstacles = append(obstacles, leftRect)
 	obstacles = append(obstacles, rightRect)
-
-	brick := Rectangle{
-		w.Dragging.PosPixels,
-		w.Dragging.PosPixels.Plus(Pt{w.BrickPixelSize, w.BrickPixelSize})}
-	return MoveRectTowardsTargetBlockedByRects2(brick, targetPos, 70, obstacles)
-}
-
-func (w *World) BrickBounds(b Brick) (r Rectangle) {
-	r.Corner1 = b.PosPixels
-	r.Corner2 = b.PosPixels
-	r.Corner2.X += w.BrickPixelSize
-	r.Corner2.Y += w.BrickPixelSize
 	return
 }
