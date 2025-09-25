@@ -18,6 +18,16 @@ const (
 	playHeight = 2000
 )
 
+type GameState int64
+
+const (
+	GameOngoing GameState = iota
+	GamePaused
+	GameWon
+	GameLost
+	Playback
+)
+
 type Gui struct {
 	layout         Pt
 	world          World
@@ -27,10 +37,16 @@ type Gui struct {
 	img2           *ebiten.Image
 	img3           *ebiten.Image
 	imgFalling     *ebiten.Image
+	imgCursor      *ebiten.Image
 	folderWatcher1 FolderWatcher
 	defaultFont    font.Face
-	screenWidth    int
-	screenHeight   int
+	screenWidth    int64
+	screenHeight   int64
+	playthrough    Playthrough
+	recordingFile  string
+	frameIdx       int64
+	state          GameState
+	mousePt        Pt // mouse position in this frame
 }
 
 func main() {
@@ -38,6 +54,24 @@ func main() {
 	ebiten.SetWindowPosition(50, 100)
 
 	var g Gui
+	g.playthrough.InputVersion = InputVersion
+	g.playthrough.SimulationVersion = 0 // SimulationVersion
+	g.playthrough.ReleaseVersion = 0    // ReleaseVersion
+	g.recordingFile = "last-recording.clone1"
+	g.state = Playback
+	// g.state = GameOngoing
+	if g.state == Playback {
+		g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))
+	}
+	g.world = NewWorld()
+
+	// Run the whole playthrough quickly to trigger the bug.
+	for i := range g.playthrough.History {
+		g.world.Step(g.playthrough.History[i])
+	}
+	g.frameIdx = int64(len(g.playthrough.History))
+	// println("got here")
+
 	if !FileExists(os.DirFS(".").(FS), "data") {
 		g.FSys = &embeddedFiles
 	} else {
@@ -56,7 +90,6 @@ func main() {
 	}
 
 	g.loadGuiData()
-	g.world = NewWorld()
 
 	// Load the Arial font.
 	var err error

@@ -9,12 +9,12 @@ type Line struct {
 
 type Circle struct {
 	Center   Pt
-	Diameter int
+	Diameter int64
 }
 
 type Square struct {
 	Center Pt
-	Size   int
+	Size   int64
 }
 
 type Rectangle struct {
@@ -22,7 +22,7 @@ type Rectangle struct {
 	Corner2 Pt
 }
 
-func Abs(x int) int {
+func Abs(x int64) int64 {
 	if x < 0 {
 		return -x
 	} else {
@@ -30,7 +30,7 @@ func Abs(x int) int {
 	}
 }
 
-func Min(x int, y int) int {
+func Min(x int64, y int64) int64 {
 	if x < y {
 		return x
 	} else {
@@ -38,7 +38,7 @@ func Min(x int, y int) int {
 	}
 }
 
-func Max(x int, y int) int {
+func Max(x int64, y int64) int64 {
 	if x > y {
 		return x
 	} else {
@@ -46,7 +46,7 @@ func Max(x int, y int) int {
 	}
 }
 
-func MinMax(x int, y int) (int, int) {
+func MinMax(x int64, y int64) (int64, int64) {
 	if x < y {
 		return x, y
 	} else {
@@ -54,11 +54,11 @@ func MinMax(x int, y int) (int, int) {
 	}
 }
 
-func (r *Rectangle) Width() int {
+func (r *Rectangle) Width() int64 {
 	return Abs(r.Corner1.X - r.Corner2.X)
 }
 
-func (r *Rectangle) Height() int {
+func (r *Rectangle) Height() int64 {
 	return Abs(r.Corner1.Y - r.Corner2.Y)
 }
 
@@ -102,13 +102,13 @@ var linePointsBuffer = make([]Pt, linePointsBufferSize)
 // GetLinePoints does the standard approximation that you might see in something
 // like Windows Paint.
 // Important: the points are ordered and go from line start to line end.
-func GetLinePoints(start Pt, end Pt, nMaxPts int) []Pt {
+func GetLinePoints(start Pt, end Pt, nMaxPts int64) []Pt {
 	if nMaxPts > linePointsBufferSize {
 		panic(fmt.Errorf("got nMaxPts = %d but can only handle at most %d "+
 			"points", nMaxPts, linePointsBufferSize))
 	}
 
-	n := 0
+	n := int64(0)
 	x1 := start.X
 	y1 := start.Y
 	x2 := end.X
@@ -169,8 +169,8 @@ func RectIntersectsRects(r Rectangle, rects []Rectangle) bool {
 // - it intersected an obstacle
 // The position of the rectangle is r.Corner1. If r can reach the targetPos,
 // then newR.Corner1 == targetPos.
-func MoveRect(r Rectangle, targetPos Pt, nMaxPixels int,
-	obstacles []Rectangle) (newR Rectangle, nPixelsLeft int) {
+func MoveRect(r Rectangle, targetPos Pt, nMaxPixels int64,
+	obstacles []Rectangle) (newR Rectangle, nPixelsLeft int64) {
 
 	// Compute the pixels along the line from the start position to the target
 	// position. We do nMaxPixels+1 because the first pixel in the line is the
@@ -180,8 +180,8 @@ func MoveRect(r Rectangle, targetPos Pt, nMaxPixels int,
 	// Move the rectangle pixel by pixel and check if it collides with any of
 	// the obstacles.
 	rSize := Pt{r.Width(), r.Height()}
-	var i int
-	for i = 1; i < len(pts); i++ {
+	var i int64
+	for i = 1; i < int64(len(pts)); i++ {
 		r = Rectangle{pts[i], pts[i].Plus(rSize)}
 		if RectIntersectsRects(r, obstacles) {
 			break

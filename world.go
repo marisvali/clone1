@@ -52,18 +52,18 @@ import (
 // - Bricks fall with acceleration.
 
 type Brick struct {
-	Val          int
+	Val          int64
 	PixelPos     Pt
 	Falling      bool
-	FallingSpeed int
+	FallingSpeed int64
 }
 
 type World struct {
-	NCols                 int
-	NRows                 int
-	BrickPixelSize        int
-	MarginPixelSize       int
-	BrickFallAcceleration int
+	NCols                 int64
+	NRows                 int64
+	BrickPixelSize        int64
+	MarginPixelSize       int64
+	BrickFallAcceleration int64
 	Bricks                []Brick
 	Dragging              *Brick
 	DraggingOffset        Pt
@@ -83,8 +83,8 @@ func NewWorld() (w World) {
 	w.BrickPixelSize = (playWidth - (w.MarginPixelSize * (w.NCols + 1))) / w.NCols
 	w.BrickFallAcceleration = 2
 
-	for y := 0; y < 4; y++ {
-		for x := 0; x < 6; x++ {
+	for y := int64(0); y < 4; y++ {
+		for x := int64(0); x < 6; x++ {
 			w.Bricks = append(w.Bricks, Brick{
 				Val:      (x+y)%3 + 1,
 				PixelPos: w.CanonicalPosToPixelsPos(Pt{x, y}),
@@ -112,8 +112,8 @@ func (w *World) PixelSize() (sz Pt) {
 
 func (w *World) PixelsPosToCanonicalPos(pixelPos Pt) (matPos Pt) {
 	l := float64(w.BrickPixelSize + w.MarginPixelSize)
-	matPos.X = int(math.Round(float64(pixelPos.X-w.MarginPixelSize) / l))
-	matPos.Y = int(math.Round(float64(playHeight-pixelPos.Y)/l - 1))
+	matPos.X = int64(math.Round(float64(pixelPos.X-w.MarginPixelSize) / l))
+	matPos.Y = int64(math.Round(float64(playHeight-pixelPos.Y)/l - 1))
 	return
 }
 
@@ -166,7 +166,13 @@ func (w *World) Step(input PlayerInput) {
 			obstacles := w.GetObstacles(&w.Bricks[i])
 			brick := w.BrickBounds(w.Bricks[i].PixelPos)
 			if RectIntersectsRects(brick, obstacles) {
-				panic("wrong!")
+				for j := range obstacles {
+					if brick.Intersects(obstacles[j]) {
+						println("got here")
+					}
+				}
+				// panic("wrong!")
+				println("got here")
 			}
 		}
 	}
@@ -285,7 +291,7 @@ func (w *World) ComputeDraggedBrickPosition(input PlayerInput) Pt {
 	obstacles := w.GetObstacles(w.Dragging)
 	brick := w.BrickBounds(w.Dragging.PixelPos)
 
-	nMaxPixels := 100
+	nMaxPixels := int64(100)
 
 	// First, go as far as possible towards the target, in a straight line.
 	brick, nMaxPixels = MoveRect(brick, targetPos, nMaxPixels, obstacles)

@@ -37,16 +37,16 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 	})
 
 	// Draw empty spaces.
-	for y := 0; y < g.world.NRows; y++ {
-		for x := 0; x < g.world.NCols; x++ {
+	for y := int64(0); y < g.world.NRows; y++ {
+		for x := int64(0); x < g.world.NCols; x++ {
 			pos := g.world.CanonicalPosToPixelsPos(Pt{x, y})
 			DrawSprite(play, g.imgBlank, float64(pos.X), float64(pos.Y),
 				float64(g.world.BrickPixelSize),
 				float64(g.world.BrickPixelSize))
 
-			brickRegion := SubImage(play, image.Rect(pos.X, pos.Y,
-				pos.X+g.world.BrickPixelSize,
-				pos.Y+g.world.BrickPixelSize))
+			brickRegion := SubImage(play, image.Rect(int(pos.X), int(pos.Y),
+				int(pos.X+g.world.BrickPixelSize),
+				int(pos.Y+g.world.BrickPixelSize)))
 			g.drawText(brickRegion, fmt.Sprintf("%dx%d", x, y), true,
 				true,
 				color.NRGBA{
@@ -118,6 +118,14 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 			B: 0,
 			A: 255,
 		})
+
+	if g.state == Playback {
+		DrawSprite(play, g.imgCursor,
+			float64(g.mousePt.X),
+			float64(g.mousePt.Y),
+			50.0, 50.0)
+	}
+
 	// dx, dy := ebiten.Wheel()
 	// ebitenutil.DebugPrint(screen, fmt.Sprintf("dx: %f dy: %f", dx, dy))
 }
@@ -216,8 +224,8 @@ func (g *Gui) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight
 	// Store these values in Gui so that Update() can use them as well,
 	// otherwise only Draw() will have access to them via the size of the
 	// screen parameter it receives.
-	g.screenWidth = screenWidth
-	g.screenHeight = screenHeight
+	g.screenWidth = int64(screenWidth)
+	g.screenHeight = int64(screenHeight)
 	return
 }
 
@@ -250,6 +258,7 @@ func (g *Gui) loadGuiData() {
 		g.img2 = LoadImage(g.FSys, "data/gui/2.png")
 		g.img3 = LoadImage(g.FSys, "data/gui/3.png")
 		g.imgFalling = LoadImage(g.FSys, "data/gui/falling.png")
+		g.imgCursor = LoadImage(g.FSys, "data/gui/cursor.png")
 		if CheckFailed == nil {
 			break
 		}
