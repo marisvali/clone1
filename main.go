@@ -26,6 +26,7 @@ type Gui struct {
 	img1           *ebiten.Image
 	img2           *ebiten.Image
 	img3           *ebiten.Image
+	imgFalling     *ebiten.Image
 	folderWatcher1 FolderWatcher
 	defaultFont    font.Face
 	screenWidth    int

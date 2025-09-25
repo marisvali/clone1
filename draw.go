@@ -39,7 +39,7 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 	// Draw empty spaces.
 	for y := 0; y < g.world.NRows; y++ {
 		for x := 0; x < g.world.NCols; x++ {
-			pos := g.world.MatPosToPixelsPos(Pt{x, y})
+			pos := g.world.CanonicalPosToPixelsPos(Pt{x, y})
 			DrawSprite(play, g.imgBlank, float64(pos.X), float64(pos.Y),
 				float64(g.world.BrickPixelSize),
 				float64(g.world.BrickPixelSize))
@@ -60,7 +60,7 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 
 	// Draw actual bricks.
 	for _, b := range g.world.Bricks {
-		pos := b.PosPixels
+		pos := b.PixelPos
 		var img *ebiten.Image
 		switch b.Val {
 		case 1:
@@ -74,6 +74,14 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 			float64(g.world.BrickPixelSize),
 			float64(g.world.BrickPixelSize))
 
+		// Have a visual marker if the brick is marked as falling.
+		// if b.Falling {
+		// 	DrawSprite(play, g.imgFalling, float64(pos.X), float64(pos.Y),
+		// 		float64(g.world.BrickPixelSize),
+		// 		float64(g.world.BrickPixelSize))
+		// }
+
+		// Mark the value of the brick with a text.
 		// brickRegion := SubImage(play, image.Rect(pos.X, pos.Y,
 		// 	pos.X+g.world.BrickPixelSize,
 		// 	pos.Y+g.world.BrickPixelSize))
@@ -241,6 +249,7 @@ func (g *Gui) loadGuiData() {
 		g.img1 = LoadImage(g.FSys, "data/gui/1.png")
 		g.img2 = LoadImage(g.FSys, "data/gui/2.png")
 		g.img3 = LoadImage(g.FSys, "data/gui/3.png")
+		g.imgFalling = LoadImage(g.FSys, "data/gui/falling.png")
 		if CheckFailed == nil {
 			break
 		}

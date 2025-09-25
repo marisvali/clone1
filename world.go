@@ -1,38 +1,73 @@
 package main
 
 import (
+	"fmt"
 	"math"
 )
 
-// World rules
-// - Each brick belongs to a position in the matrix.
-// - The position in the matrix to which the brick belongs to is determined like
-// this: the matrix position for which the center is the closest to the center
-// of a brick.
-// - If a brick has no brick underneath it, it falls until it reaches a position
-// in the matrix where there is a brick underneath it.
-// - A brick has no brick underneath it if there is no brick at the matrix
-// position underneath it for X seconds.
-// - While bricks move, a brick cannot overlap another brick.
-// - If a brick has no brick underneath it and it falls and that would mean it
-// would overlap another brick which is currently being dragged, it pushes the
-// dragged brick away.
+// World rules (physics)
+// ---------------------
+//
+// Terminology:
+// - Slot: the space of the world is a matrix of 6x8 rectangles separated by some
+// margins. These rectangular places are called slots. Some are empty, some will
+// have bricks in them.
+// - Brick: rectangular objects that fit inside slots that the player can drag
+// around and match.
+// - Canonical position: a position in the matrix of slots. For example
+// (2, 0) means the third brick at the bottom row.
+// - Pixel position: the position of a brick in terms of pixels, not slots. The
+// pixel position can place a brick between slots.
+// - Canonical pixel position: a position in the matrix of slots converted to
+// pixel coordinates. For example depending on brick size and margin sizes the
+// canonical position (2, 0) can be turned into the canonical pixel position
+// (230, 30).
+// - Static brick: a brick that is currently not moving on its own and not being
+// dragged around by the player.
+// - Dragging brick: a brick that the player has clicked on and is currently
+// dragging around the world space.
+// - Falling brick: a brick that is not dragged by the player and is currently
+// falling because it has nothing underneath it.
+//
+// Rules for dragging a brick:
+// - When the player clicks on a brick, it becomes a dragging brick.
+// - When the player releases the click on a brick, the dragging brick moves to
+// its nearest canonical position and becomes a static or falling brick.
+// - When the player moves the mouse while dragging a brick, the brick moves
+// towards the mouse position.
+// - If the dragged brick hits a wall or another brick, it stops moving on the
+// axis where it hit the obstacle, but it continues moving on the other axis
+// as long as possible.
+// - The dragged brick goes towards the mouse cursor with some limited speed,
+// it doesn't just teleport to the nearest valid position in a single frame.
+//
+// Rules for falling:
+// - A static brick becomes a falling brick when the slot underneath it is
+// completely free (does not contain any part of any other brick, static or
+// dragging).
+// - A falling brick stops being a falling brick when it intersects another
+// brick.
+// - When a falling brick stops being a falling brick, it moves to its canonical
+// position automatically.
+// - Bricks fall with acceleration.
 
 type Brick struct {
-	Val int
-	// PosMat    Pt
-	PosPixels Pt
+	Val          int
+	PixelPos     Pt
+	Falling      bool
+	FallingSpeed int
 }
 
 type World struct {
-	NCols           int
-	NRows           int
-	BrickPixelSize  int
-	MarginPixelSize int
-	Bricks          []Brick
-	Dragging        *Brick
-	DraggingOffset  Pt
-	DebugPts        []Pt
+	NCols                 int
+	NRows                 int
+	BrickPixelSize        int
+	MarginPixelSize       int
+	BrickFallAcceleration int
+	Bricks                []Brick
+	Dragging              *Brick
+	DraggingOffset        Pt
+	DebugPts              []Pt
 }
 
 type PlayerInput struct {
@@ -46,25 +81,25 @@ func NewWorld() (w World) {
 	w.NRows = 8
 	w.MarginPixelSize = 30
 	w.BrickPixelSize = (playWidth - (w.MarginPixelSize * (w.NCols + 1))) / w.NCols
+	w.BrickFallAcceleration = 2
 
-	// for y := 0; y < 4; y++ {
-	// 	for x := 0; x < 6; x++ {
-	// 		w.Bricks = append(w.Bricks, Brick{
-	// 			Val:       3,
-	// 			PosMat:    Pt{x, y},
-	// 			PosPixels: w.MatPosToPixelsPos(Pt{x, y}),
-	// 		})
-	// 	}
-	// }
-	for y := 0; y < 1; y++ {
-		for x := 0; x < 3; x++ {
+	for y := 0; y < 4; y++ {
+		for x := 0; x < 6; x++ {
 			w.Bricks = append(w.Bricks, Brick{
-				Val: 3,
-				// PosMat:    Pt{x, y},
-				PosPixels: w.MatPosToPixelsPos(Pt{x, y}),
+				Val:      (x+y)%3 + 1,
+				PixelPos: w.CanonicalPosToPixelsPos(Pt{x, y}),
 			})
 		}
 	}
+	// for y := 0; y < 1; y++ {
+	// 	for x := 0; x < 3; x++ {
+	// 		w.Bricks = append(w.Bricks, Brick{
+	// 			Val: 3,
+	// 			// PosMat:    Pt{x, y},
+	// 			PixelPos: w.CanonicalPosToPixelsPos(Pt{x, y}),
+	// 		})
+	// 	}
+	// }
 	w.Dragging = nil
 	return w
 }
@@ -75,35 +110,18 @@ func (w *World) PixelSize() (sz Pt) {
 	return
 }
 
-func (w *World) PixelsPosToMatPos(pixelPos Pt) (matPos Pt) {
+func (w *World) PixelsPosToCanonicalPos(pixelPos Pt) (matPos Pt) {
 	l := float64(w.BrickPixelSize + w.MarginPixelSize)
 	matPos.X = int(math.Round(float64(pixelPos.X-w.MarginPixelSize) / l))
 	matPos.Y = int(math.Round(float64(playHeight-pixelPos.Y)/l - 1))
 	return
 }
 
-func (w *World) MatPosToPixelsPos(matPos Pt) (pixelPos Pt) {
+func (w *World) CanonicalPosToPixelsPos(matPos Pt) (pixelPos Pt) {
 	l := w.BrickPixelSize + w.MarginPixelSize
 	pixelPos.X = matPos.X*l + w.MarginPixelSize
 	pixelPos.Y = playHeight - (matPos.Y+1)*l
 	return
-}
-
-func (w *World) DraggingBrickHasValidPos() bool {
-	if w.Dragging == nil {
-		return false
-	}
-	r := w.BrickBounds(*w.Dragging)
-	for j := range w.Bricks {
-		if w.Dragging == &w.Bricks[j] {
-			continue
-		}
-		r2 := w.BrickBounds(w.Bricks[j])
-		if r.Intersects(r2) {
-			return false
-		}
-	}
-	return true
 }
 
 func (w *World) Step(input PlayerInput) {
@@ -115,7 +133,7 @@ func (w *World) Step(input PlayerInput) {
 
 		// Check if there's any brick under the click.
 		for i := range w.Bricks {
-			p := w.Bricks[i].PosPixels
+			p := w.Bricks[i].PixelPos
 			brickSize := Pt{w.BrickPixelSize, w.BrickPixelSize}
 			r := Rectangle{p, p.Plus(brickSize)}
 			if r.ContainsPt(input.Pos) {
@@ -129,69 +147,108 @@ func (w *World) Step(input PlayerInput) {
 	if input.JustReleased {
 		if w.Dragging != nil {
 			// Reset dragged brick's position.
-			// w.Dragging.PosMat = w.PixelsPosToMatPos(w.Dragging.PosPixels)
-			w.Dragging.PosPixels = w.MatPosToPixelsPos(w.PixelsPosToMatPos(w.Dragging.PosPixels))
+			// w.Dragging.PosMat = w.PixelsPosToCanonicalPos(w.Dragging.PixelPos)
+			w.Dragging.PixelPos = w.CanonicalPosToPixelsPos(w.PixelsPosToCanonicalPos(w.Dragging.PixelPos))
 		}
 		w.Dragging = nil
 	}
 
 	if w.Dragging != nil {
-		w.Dragging.PosPixels = w.ComputeDraggedBrickPosition(input)
+		w.Dragging.PixelPos = w.ComputeDraggedBrickPosition(input)
 	}
 
-	// make bricks fall
-	for i := range w.Bricks {
-		// check which bricks are supposed to fall
-		b := &w.Bricks[i]
-		if b == w.Dragging {
-			continue
-		}
-		// check if there are any bricks under b
-		pixelPosOfClosestMatPos := w.MatPosToPixelsPos(w.PixelsPosToMatPos(b.PosPixels))
-		posUnder := w.PixelsPosToMatPos(b.PosPixels)
-		if pixelPosOfClosestMatPos == b.PosPixels {
-			posUnder.Subtract(Pt{0, 1})
-		}
-
-		if posUnder.Y < 0 {
-			continue
-		}
-		existsUnder := false
-		for j := range w.Bricks {
-			if i == j {
-				continue
-			}
-			if w.PixelsPosToMatPos(w.Bricks[j].PosPixels) == posUnder {
-				existsUnder = true
-				break
-			}
-		}
-		if !existsUnder {
-			// First, get the set of rectangles the brick must not intersect.
-			target := b.PosPixels.Plus(Pt{0, 900})
-			obstacles := w.GetObstacles(b)
-			bRect := w.BrickBounds(*b)
-			newR, _ := MoveRect(bRect, target, 10, obstacles)
-			b.PosPixels = newR.Corner1
-		}
-	}
+	w.SetBricksToFalling()
+	w.AdvanceFallingBricks()
 
 	// check if we got in a bad state
 	{
 		for i := range w.Bricks {
 			obstacles := w.GetObstacles(&w.Bricks[i])
-			brick := w.BrickBounds(w.Bricks[i])
+			brick := w.BrickBounds(w.Bricks[i].PixelPos)
 			if RectIntersectsRects(brick, obstacles) {
-				println("got here")
+				panic("wrong!")
 			}
+		}
+	}
+}
+
+func (w *World) SetBricksToFalling() {
+	// Mark falling bricks.
+	for i := range w.Bricks {
+		// Skip the dragging brick.
+		b := &w.Bricks[i]
+		if b == w.Dragging {
+			continue
+		}
+
+		// Skip already falling bricks.
+		if b.Falling {
+			continue
+		}
+
+		// Assert that if a brick is not falling, it is at its canonical pos.
+		{
+			cPos := w.PixelsPosToCanonicalPos(b.PixelPos)
+			pPos := w.CanonicalPosToPixelsPos(cPos)
+			if pPos != b.PixelPos {
+				panic(fmt.Errorf("brick is not at its canonical pos"))
+			}
+		}
+
+		// Check if the space under the brick is completely empty
+		cPos := w.PixelsPosToCanonicalPos(b.PixelPos)
+		cPos.Y--
+		if cPos.Y < 0 {
+			// The brick is already at the bottom, it cannot fall any lower.
+			continue
+		}
+
+		// Get the rectangle below the brick.
+		pPos := w.CanonicalPosToPixelsPos(cPos)
+		r := w.BrickBounds(pPos)
+
+		// Check if anything is in the rectangle.
+		obstacles := w.GetObstacles(b)
+		if RectIntersectsRects(r, obstacles) {
+			// There's something in the space.
+			continue
+		}
+
+		b.Falling = true
+		b.FallingSpeed = 0
+	}
+}
+
+func (w *World) AdvanceFallingBricks() {
+	for i := range w.Bricks {
+		b := &w.Bricks[i]
+		if !b.Falling {
+			// Skip non-falling bricks.
+			continue
+		}
+
+		// Move the brick.
+		r := w.BrickBounds(b.PixelPos)
+		obstacles := w.GetObstacles(b)
+		b.FallingSpeed += w.BrickFallAcceleration
+		newR, nPixelsLeft := MoveRect(r, r.Corner1.Plus(Pt{0, 1000}),
+			b.FallingSpeed, obstacles)
+		b.PixelPos = newR.Corner1
+
+		if nPixelsLeft > 0 {
+			// We hit something.
+			// Mark the brick as no longer falling and move it to its canonical
+			// position.
+			b.Falling = false
+			b.FallingSpeed = 0
+			cPos := w.PixelsPosToCanonicalPos(b.PixelPos)
+			b.PixelPos = w.CanonicalPosToPixelsPos(cPos)
 		}
 	}
 }
 
 func (w *World) ComputeDraggedBrickPosition(input PlayerInput) Pt {
 	targetPos := input.Pos.Plus(w.DraggingOffset)
-	// targetPos := input.Pos
-
 	// The overall logic of the movement is this:
 	// - simulate the brick being dragged/moved towards the mouse position
 	// - if the brick hits a wall or another brick, stop moving it on the
@@ -226,7 +283,7 @@ func (w *World) ComputeDraggedBrickPosition(input PlayerInput) Pt {
 
 	// First, get the set of rectangles the brick must not intersect.
 	obstacles := w.GetObstacles(w.Dragging)
-	brick := w.BrickBounds(*w.Dragging)
+	brick := w.BrickBounds(w.Dragging.PixelPos)
 
 	nMaxPixels := 100
 
@@ -244,9 +301,9 @@ func (w *World) ComputeDraggedBrickPosition(input PlayerInput) Pt {
 	return brick.Corner1
 }
 
-func (w *World) BrickBounds(b Brick) (r Rectangle) {
-	r.Corner1 = b.PosPixels
-	r.Corner2 = b.PosPixels
+func (w *World) BrickBounds(posPixels Pt) (r Rectangle) {
+	r.Corner1 = posPixels
+	r.Corner2 = posPixels
 	r.Corner2.X += w.BrickPixelSize
 	r.Corner2.Y += w.BrickPixelSize
 	return
@@ -258,7 +315,7 @@ func (w *World) GetObstacles(exception *Brick) (obstacles []Rectangle) {
 		if exception == &w.Bricks[j] {
 			continue
 		}
-		obstacles = append(obstacles, w.BrickBounds(w.Bricks[j]))
+		obstacles = append(obstacles, w.BrickBounds(w.Bricks[j].PixelPos))
 	}
 
 	bottom := playHeight - w.MarginPixelSize
