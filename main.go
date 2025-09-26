@@ -26,6 +26,7 @@ const (
 	GameWon
 	GameLost
 	Playback
+	DebugCrash
 )
 
 type Gui struct {
@@ -58,19 +59,33 @@ func main() {
 	g.playthrough.SimulationVersion = 0 // SimulationVersion
 	g.playthrough.ReleaseVersion = 0    // ReleaseVersion
 	g.recordingFile = "last-recording.clone1"
-	g.state = Playback
+	g.state = DebugCrash
 	// g.state = GameOngoing
-	if g.state == Playback {
+	if g.state == Playback || g.state == DebugCrash {
 		g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))
+	}
+	if g.state == DebugCrash {
+		// Don't crash when we are debugging the crash. This is useful if the
+		// crash was caused by one of my asserts:
+		// - world.Step() crashed during the last frame, because my assert
+		// Check(fmt.Errorf(..))
+		// - Now Check() doesn't crash anymore.
+		// - I can have the world.Step() with the bug execute, and I can see the
+		// results visually
+		CheckCrashes = false
 	}
 	g.world = NewWorld()
 
-	// Run the whole playthrough quickly to trigger the bug.
-	for i := range g.playthrough.History {
-		g.world.Step(g.playthrough.History[i])
+	// The last input caused the crash, so run the whole playthrough except the
+	// last input. This gives me a chance to see the current state of the world
+	// visually, maybe place a breakpoint and inspect the state of the world
+	// in the debugger, and then when I'm ready, trigger the bug.
+	if g.state == DebugCrash {
+		g.frameIdx = int64(len(g.playthrough.History)) - 1
+		for i := range g.frameIdx {
+			g.world.Step(g.playthrough.History[i])
+		}
 	}
-	g.frameIdx = int64(len(g.playthrough.History))
-	// println("got here")
 
 	if !FileExists(os.DirFS(".").(FS), "data") {
 		g.FSys = &embeddedFiles

@@ -248,6 +248,7 @@ func (g *Gui) loadGuiData() {
 	// want to crash as soon as possible. We might be in the browser, in which
 	// case we want to see an error in the developer console instead of a page
 	// that keeps trying to load and reports nothing.
+	previousVal := CheckCrashes
 	if g.FSys == nil {
 		CheckCrashes = false
 	}
@@ -263,7 +264,7 @@ func (g *Gui) loadGuiData() {
 			break
 		}
 	}
-	CheckCrashes = true
+	CheckCrashes = previousVal
 
 	g.updateWindowSize()
 }

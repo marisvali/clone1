@@ -160,19 +160,17 @@ func (w *World) Step(input PlayerInput) {
 	w.SetBricksToFalling()
 	w.AdvanceFallingBricks()
 
-	// check if we got in a bad state
+	// Check if we got in a bad state.
 	{
 		for i := range w.Bricks {
 			obstacles := w.GetObstacles(&w.Bricks[i])
 			brick := w.BrickBounds(w.Bricks[i].PixelPos)
-			if RectIntersectsRects(brick, obstacles) {
-				for j := range obstacles {
-					if brick.Intersects(obstacles[j]) {
-						println("got here")
-					}
+			// Don't use RectIntersectsRects because I want to be able to
+			// put a breakpoint here and see which rect intersects which.
+			for j := range obstacles {
+				if brick.Intersects(obstacles[j]) {
+					Check(fmt.Errorf("solids intersect each other"))
 				}
-				// panic("wrong!")
-				println("got here")
 			}
 		}
 	}
