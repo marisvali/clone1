@@ -59,8 +59,8 @@ func main() {
 	g.playthrough.SimulationVersion = 0 // SimulationVersion
 	g.playthrough.ReleaseVersion = 0    // ReleaseVersion
 	g.recordingFile = "last-recording.clone1"
-	g.state = DebugCrash
-	// g.state = GameOngoing
+	g.state = GameOngoing
+	// g.state = DebugCrash
 	if g.state == Playback || g.state == DebugCrash {
 		g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))
 	}
