@@ -131,6 +131,10 @@ func GetLinePoints(start Pt, end Pt, nMaxPts int64) []Pt {
 		// each X.
 		inc := dx / Abs(dx) // I use inc, which might be +1 or -1, because it is
 		// important for me to go from start to end, not just from min to max.
+		x2 += inc // We want the end point to be added to the line if it is
+		// within nMaxPts. The condition for x must be x != x2 because we don't
+		// know if inc is 1 or -1 so we cannot do x <= x2 or x >= x2. So, just
+		// increase x2 by inc.
 		for x := x1; x != x2 && n < nMaxPts; x += inc {
 			// I intentionally don't compute dy/dx once and reuse it because
 			// that would mean doing floating point operations. I want to do
@@ -142,6 +146,7 @@ func GetLinePoints(start Pt, end Pt, nMaxPts int64) []Pt {
 	} else {
 		// The comments for X apply here as well, with X and Y interchanged.
 		inc := dy / Abs(dy)
+		y2 += inc
 		for y := y1; y != y2 && n < nMaxPts; y += inc {
 			x := x1 + (y-y1)*dx/dy
 			linePointsBuffer[n] = Pt{x, y}
