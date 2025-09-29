@@ -128,17 +128,23 @@ func (w *World) PixelSize() (sz Pt) {
 	return
 }
 
-func (w *World) PixelsPosToCanonicalPos(pixelPos Pt) (matPos Pt) {
+func (w *World) PixelsPosToCanonicalPos(pixelPos Pt) (canPos Pt) {
 	l := float64(w.BrickPixelSize + w.MarginPixelSize)
-	matPos.X = int64(math.Round(float64(pixelPos.X-w.MarginPixelSize) / l))
-	matPos.Y = int64(math.Round(float64(playHeight-pixelPos.Y)/l - 1))
+	canPos.X = int64(math.Round(float64(pixelPos.X-w.MarginPixelSize) / l))
+	canPos.Y = int64(math.Round(float64(playHeight-pixelPos.Y)/l - 1))
 	return
 }
 
-func (w *World) CanonicalPosToPixelsPos(matPos Pt) (pixelPos Pt) {
+func (w *World) CanonicalPosToPixelsPos(canPos Pt) (pixelPos Pt) {
 	l := w.BrickPixelSize + w.MarginPixelSize
-	pixelPos.X = matPos.X*l + w.MarginPixelSize
-	pixelPos.Y = playHeight - (matPos.Y+1)*l
+	pixelPos.X = canPos.X*l + w.MarginPixelSize
+	pixelPos.Y = playHeight - (canPos.Y+1)*l
+	return
+}
+
+func (w *World) PixelPosToCanonicalPixelPos(pixelPos Pt) (canPixelPos Pt) {
+	canPos := w.PixelsPosToCanonicalPos(pixelPos)
+	canPixelPos = w.CanonicalPosToPixelsPos(canPos)
 	return
 }
 
@@ -146,6 +152,7 @@ func (w *World) Step(input PlayerInput) {
 	w.UpdateDraggedBrick(input)
 	w.UpdateFallingBricks()
 	w.UpdateCanonicalBricks()
+	w.MergeBricks()
 
 	// Check if bricks intersect each other or are out of bounds.
 	{
@@ -299,35 +306,33 @@ func (w *World) UpdateCanonicalBricks() {
 			b.FallingSpeed = 0
 		} else {
 			// Go towards the closest canonical pos.
-			cPos := w.PixelsPosToCanonicalPos(b.PixelPos)
-			pPos := w.CanonicalPosToPixelsPos(cPos)
+			canPixelPos := w.PixelPosToCanonicalPixelPos(b.PixelPos)
 
 			// Move the brick.
 			r := w.BrickBounds(b.PixelPos)
 			obstacles := w.GetObstacles(b)
-			newR, _ := MoveRect(r, pPos, 20, obstacles)
+			newR, _ := MoveRect(r, canPixelPos, 20, obstacles)
 			b.PixelPos = newR.Corner1
 		}
 	}
 }
 
 func (w *World) AtCanonicalPosition(b *Brick) bool {
-	cPos := w.PixelsPosToCanonicalPos(b.PixelPos)
-	pPos := w.CanonicalPosToPixelsPos(cPos)
-	return pPos == b.PixelPos
+	canPixelPos := w.PixelPosToCanonicalPixelPos(b.PixelPos)
+	return canPixelPos == b.PixelPos
 }
 
 func (w *World) SpaceUnderBrickIsEmpty(b *Brick) bool {
-	cPos := w.PixelsPosToCanonicalPos(b.PixelPos)
-	cPos.Y--
-	if cPos.Y < 0 {
+	canPos := w.PixelsPosToCanonicalPos(b.PixelPos)
+	canPos.Y--
+	if canPos.Y < 0 {
 		// The brick is already at the bottom, it cannot fall any lower.
 		return false
 	}
 
 	// Get the rectangle below the brick.
-	pPos := w.CanonicalPosToPixelsPos(cPos)
-	r := w.BrickBounds(pPos)
+	canPixelPos := w.CanonicalPosToPixelsPos(canPos)
+	r := w.BrickBounds(canPixelPos)
 
 	// Check if anything is in the rectangle.
 	obstacles := w.GetObstacles(b)
@@ -352,6 +357,10 @@ func (w *World) GetObstacles(exception *Brick) (obstacles []Rectangle) {
 		if exception == &w.Bricks[j] {
 			continue
 		}
+		// Skip bricks that have the same value.
+		if exception.Val == w.Bricks[j].Val {
+			continue
+		}
 		obstacles = append(obstacles, w.BrickBounds(w.Bricks[j].PixelPos))
 	}
 
@@ -370,4 +379,90 @@ func (w *World) GetObstacles(exception *Brick) (obstacles []Rectangle) {
 	obstacles = append(obstacles, leftRect)
 	obstacles = append(obstacles, rightRect)
 	return
+}
+
+func (w *World) MergeBricks() {
+	// Keep doing merges until no merges are possible anymore.
+	// I don't expect to ever have more than one merge happen in one frame but
+	// I feel weird hardcoding that assumption when I can just add a loop to
+	// handle that case as well.
+	for {
+		foundMerge, i, j := w.FindMergingBricks()
+		if !foundMerge {
+			return
+		}
+
+		// A merge occurred. A brick will disappear and one will have
+		// its value increased.
+		// How do I choose which one disappears and which one has its
+		// value increased?
+		// The most common case is that the dragged brick is dragged on
+		// top of a canonical brick. It's also common for a falling
+		// brick to get on top of a canonical brick. Less common, but
+		// possible, is to have a falling brick get on top of a dragged
+		// brick. Something that can happen more often that it seems likely,
+		// a canonical brick and move on top of a canonical brick. This is
+		// because the player drags a brick near the one they intend to merge
+		// with and then releases the brick early. The released brick becomes
+		// canonical and is now moving towards the position where the static
+		// brick is.
+		// The way to cover all these cases in one is to detect which of
+		// the two bricks is closer to a canonical position. That one
+		// gets its value increased, the other one disappears. And the
+		// one which gets its value increased becomes a canonical brick,
+		// just to cover any weird edge cases. I feel like the result
+		// of a merge should go to a canonical position first and if it
+		// then needs to fall, it does so after it goes to the canonical
+		// position.
+		b1 := &w.Bricks[i]
+		b2 := &w.Bricks[j]
+		canPos1 := w.PixelPosToCanonicalPixelPos(b1.PixelPos)
+		dif1 := b1.PixelPos.SquaredDistTo(canPos1)
+
+		canPos2 := w.PixelPosToCanonicalPixelPos(b2.PixelPos)
+		dif2 := b2.PixelPos.SquaredDistTo(canPos2)
+
+		var idxToRemove int
+		var brickToUpdate *Brick
+		if dif1 < dif2 {
+			// b1 is closer to a canonical pos.
+			brickToUpdate = b1
+			idxToRemove = j
+		} else {
+			// b2 is closer to a canonical pos.
+			brickToUpdate = b2
+			idxToRemove = i
+		}
+
+		brickToUpdate.Val++
+
+		// Do a loop for now between values as I don't have all the
+		// values and the rules for them are not yet clear.
+		if brickToUpdate.Val > 3 {
+			brickToUpdate.Val = 1
+		}
+		brickToUpdate.State = Canonical
+
+		// Remove from slice efficiently.
+		w.Bricks[idxToRemove] = w.Bricks[len(w.Bricks)-1]
+		w.Bricks = w.Bricks[:len(w.Bricks)-1]
+	}
+}
+
+func (w *World) FindMergingBricks() (foundMerge bool, i, j int) {
+	for i = range w.Bricks {
+		for j = range w.Bricks {
+			if i == j {
+				continue
+			}
+
+			dist := w.Bricks[i].PixelPos.SquaredDistTo(w.Bricks[j].PixelPos)
+			// Two bricks merge if they are close enough for each other.
+			// We decide here what "close enough" means.
+			if dist < Sqr(w.BrickPixelSize/3) {
+				return true, i, j
+			}
+		}
+	}
+	return false, 0, 0
 }

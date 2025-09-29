@@ -254,3 +254,7 @@ func ZipToFile(filename string, data []byte) {
 	// Actually write the zip to disk.
 	WriteFile(filename, Zip(data))
 }
+
+func Sqr(x int64) int64 {
+	return x * x
+}

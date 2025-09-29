@@ -59,7 +59,54 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 	}
 
 	// Draw actual bricks.
+	// Make sure dragged and falling bricks get drawn on top of canonical ones,
+	// so you always see the brick that's moving to be moving on top of the
+	// brick that's static.
+	// Between dragged and falling I just chose the falling to be on top of the
+	// dragged. It will not happen very often, when it does it will be too quick
+	// to really notice it, but I feel when it happens it will be because the
+	// falling brick will come on top of the dragged brick, which the player
+	// is moving around with more hesitation than the falling brick. I am not
+	// sure if that makes sense, but between the dragged and the falling brick
+	// I just chose for the falling brick to be the dominating one.
+	g.DrawBricks(play, Canonical)
+	g.DrawBricks(play, Dragged)
+	g.DrawBricks(play, Falling)
+
+	for _, pt := range g.world.DebugPts {
+		DrawPixel(play, pt, color.NRGBA{
+			R: 255,
+			G: 0,
+			B: 0,
+			A: 255,
+		})
+	}
+
+	g.drawText(screen, fmt.Sprintf("ActualTPS: %f", ebiten.ActualTPS()), false,
+		false,
+		color.NRGBA{
+			R: 0,
+			G: 100,
+			B: 0,
+			A: 255,
+		})
+
+	if g.state == Playback {
+		DrawSprite(play, g.imgCursor,
+			float64(g.mousePt.X),
+			float64(g.mousePt.Y),
+			50.0, 50.0)
+	}
+
+	// dx, dy := ebiten.Wheel()
+	// ebitenutil.DebugPrint(screen, fmt.Sprintf("dx: %f dy: %f", dx, dy))
+}
+
+func (g *Gui) DrawBricks(play *ebiten.Image, s BrickState) {
 	for _, b := range g.world.Bricks {
+		if b.State != s {
+			continue
+		}
 		pos := b.PixelPos
 		var img *ebiten.Image
 		switch b.Val {
@@ -100,34 +147,6 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 		// 		A: 255,
 		// 	})
 	}
-
-	for _, pt := range g.world.DebugPts {
-		DrawPixel(play, pt, color.NRGBA{
-			R: 255,
-			G: 0,
-			B: 0,
-			A: 255,
-		})
-	}
-
-	g.drawText(screen, fmt.Sprintf("ActualTPS: %f", ebiten.ActualTPS()), false,
-		false,
-		color.NRGBA{
-			R: 0,
-			G: 100,
-			B: 0,
-			A: 255,
-		})
-
-	if g.state == Playback {
-		DrawSprite(play, g.imgCursor,
-			float64(g.mousePt.X),
-			float64(g.mousePt.Y),
-			50.0, 50.0)
-	}
-
-	// dx, dy := ebiten.Wheel()
-	// ebitenutil.DebugPrint(screen, fmt.Sprintf("dx: %f dy: %f", dx, dy))
 }
 
 func (g *Gui) drawText(screen *ebiten.Image, message string, centerX bool, centerY bool, color color.Color) {
