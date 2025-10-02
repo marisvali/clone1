@@ -14,8 +14,8 @@ import (
 var embeddedFiles embed.FS
 
 const (
-	playWidth  = 1200
-	playHeight = 2000
+	playWidth  = int64(1200)
+	playHeight = int64(2000)
 )
 
 type GameState int64
@@ -30,24 +30,26 @@ const (
 )
 
 type Gui struct {
-	layout         Pt
-	world          World
-	FSys           FS
-	imgBlank       *ebiten.Image
-	img1           *ebiten.Image
-	img2           *ebiten.Image
-	img3           *ebiten.Image
-	imgFalling     *ebiten.Image
-	imgCursor      *ebiten.Image
-	folderWatcher1 FolderWatcher
-	defaultFont    font.Face
-	screenWidth    int64
-	screenHeight   int64
-	playthrough    Playthrough
-	recordingFile  string
-	frameIdx       int64
-	state          GameState
-	mousePt        Pt // mouse position in this frame
+	layout            Pt
+	world             World
+	FSys              FS
+	imgBlank          *ebiten.Image
+	img1              *ebiten.Image
+	img2              *ebiten.Image
+	img3              *ebiten.Image
+	imgFalling        *ebiten.Image
+	imgCursor         *ebiten.Image
+	folderWatcher1    FolderWatcher
+	defaultFont       font.Face
+	screenWidth       int64
+	screenHeight      int64
+	playthrough       Playthrough
+	recordingFile     string
+	frameIdx          int64
+	state             GameState
+	mousePt           Pt // mouse position in this frame
+	debugMarginWidth  int64
+	debugMarginHeight int64
 }
 
 func main() {
@@ -58,6 +60,8 @@ func main() {
 	g.playthrough.InputVersion = InputVersion
 	g.playthrough.SimulationVersion = 0 // SimulationVersion
 	g.playthrough.ReleaseVersion = 0    // ReleaseVersion
+	g.debugMarginWidth = 10
+	g.debugMarginHeight = 200
 	g.recordingFile = "last-recording.clone1"
 	g.state = GameOngoing
 	g.state = Playback

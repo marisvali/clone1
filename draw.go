@@ -19,17 +19,44 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 		A: 255,
 	})
 
-	marginX := (screen.Bounds().Size().X - playWidth) / 2
-	marginY := (screen.Bounds().Size().Y - playHeight) / 2
+	adjustedPlayWidth := playWidth
+	adjustedPlayHeight := playHeight
+	if g.state == Playback || g.state == DebugCrash {
+		adjustedPlayWidth += g.debugMarginWidth
+		adjustedPlayHeight += g.debugMarginHeight
+	}
+
+	marginX := (int64(screen.Bounds().Size().X) - adjustedPlayWidth) / 2
+	marginY := (int64(screen.Bounds().Size().Y) - adjustedPlayHeight) / 2
 
 	play := SubImage(screen, image.Rect(
-		marginX,
-		marginY,
-		marginX+playWidth,
-		marginY+playHeight))
+		int(marginX),
+		int(marginY),
+		int(marginX+playWidth),
+		int(marginY+playHeight)))
+	g.DrawPlayRegion(play)
 
+	debugHorizontal := SubImage(screen, image.Rect(
+		int(marginX),
+		int(marginY+playHeight),
+		int(marginX+adjustedPlayWidth),
+		int(marginY+adjustedPlayHeight)))
+	g.DrawDebugControlsHorizontal(debugHorizontal)
+
+	debugVertical := SubImage(screen, image.Rect(
+		int(marginX+playWidth),
+		int(marginY),
+		int(marginX+adjustedPlayWidth),
+		int(marginY+playHeight)))
+	g.DrawDebugControlsVertical(debugVertical)
+
+	// dx, dy := ebiten.Wheel()
+	// ebitenutil.DebugPrint(screen, fmt.Sprintf("dx: %f dy: %f", dx, dy))
+}
+
+func (g *Gui) DrawPlayRegion(screen *ebiten.Image) {
 	// Highlight the play region for dev purposes.
-	play.Fill(color.NRGBA{
+	screen.Fill(color.NRGBA{
 		R: 230,
 		G: 237,
 		B: 240,
@@ -40,11 +67,11 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 	for y := int64(0); y < g.world.NRows; y++ {
 		for x := int64(0); x < g.world.NCols; x++ {
 			pos := g.world.CanonicalPosToPixelsPos(Pt{x, y})
-			DrawSprite(play, g.imgBlank, float64(pos.X), float64(pos.Y),
+			DrawSprite(screen, g.imgBlank, float64(pos.X), float64(pos.Y),
 				float64(g.world.BrickPixelSize),
 				float64(g.world.BrickPixelSize))
 
-			brickRegion := SubImage(play, image.Rect(int(pos.X), int(pos.Y),
+			brickRegion := SubImage(screen, image.Rect(int(pos.X), int(pos.Y),
 				int(pos.X+g.world.BrickPixelSize),
 				int(pos.Y+g.world.BrickPixelSize)))
 			g.drawText(brickRegion, fmt.Sprintf("%dx%d", x, y), true,
@@ -69,12 +96,12 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 	// is moving around with more hesitation than the falling brick. I am not
 	// sure if that makes sense, but between the dragged and the falling brick
 	// I just chose for the falling brick to be the dominating one.
-	g.DrawBricks(play, Canonical)
-	g.DrawBricks(play, Dragged)
-	g.DrawBricks(play, Falling)
+	g.DrawBricks(screen, Canonical)
+	g.DrawBricks(screen, Dragged)
+	g.DrawBricks(screen, Falling)
 
 	for _, pt := range g.world.DebugPts {
-		DrawPixel(play, pt, color.NRGBA{
+		DrawPixel(screen, pt, color.NRGBA{
 			R: 255,
 			G: 0,
 			B: 0,
@@ -92,14 +119,29 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 		})
 
 	if g.state == Playback {
-		DrawSprite(play, g.imgCursor,
+		DrawSprite(screen, g.imgCursor,
 			float64(g.mousePt.X),
 			float64(g.mousePt.Y),
 			50.0, 50.0)
 	}
+}
 
-	// dx, dy := ebiten.Wheel()
-	// ebitenutil.DebugPrint(screen, fmt.Sprintf("dx: %f dy: %f", dx, dy))
+func (g *Gui) DrawDebugControlsHorizontal(screen *ebiten.Image) {
+	screen.Fill(color.NRGBA{
+		R: 0,
+		G: 255,
+		B: 0,
+		A: 255,
+	})
+}
+
+func (g *Gui) DrawDebugControlsVertical(screen *ebiten.Image) {
+	screen.Fill(color.NRGBA{
+		R: 0,
+		G: 0,
+		B: 255,
+		A: 255,
+	})
 }
 
 func (g *Gui) DrawBricks(play *ebiten.Image, s BrickState) {
@@ -215,6 +257,19 @@ func (g *Gui) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight
 	// large as it can be, but still fit inside the screen. This means either
 	// screenWidth = 1200 or screenHeight = 2000.
 	//
+	// Extra complication:
+	// - For debug purposes I find it very useful to have extra space to place
+	// controls.
+	// - The mechanism above guarantees a region of playWidth x playHeight.
+	// - The easiest way to add space for my controls is to add margins to
+	// playWidth and playHeight.
+	adjustedPlayWidth := playWidth
+	adjustedPlayHeight := playHeight
+	if g.state == Playback || g.state == DebugCrash {
+		adjustedPlayWidth += g.debugMarginWidth
+		adjustedPlayHeight += g.debugMarginHeight
+	}
+
 	// Find out if we need to match the screen width to the play width or the
 	// screen height to the play height.
 	// The aspect ratio of a rectangle is width / height. As an aspect ratio
@@ -229,13 +284,13 @@ func (g *Gui) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight
 	// I want play to fit inside screen, so screen is A and play is B.
 	outsideAspectRatio := float64(outsideWidth) / float64(outsideHeight)
 	screenAspectRatio := outsideAspectRatio
-	playAspectRatio := float64(playWidth) / float64(playHeight)
+	playAspectRatio := float64(adjustedPlayWidth) / float64(adjustedPlayHeight)
 	if screenAspectRatio < playAspectRatio {
-		screenWidth = playWidth
+		screenWidth = int(adjustedPlayWidth)
 		// screenAspectRatio = screenWidth / screenHeight, which means:
 		screenHeight = int(float64(screenWidth) / screenAspectRatio)
 	} else {
-		screenHeight = playHeight
+		screenHeight = int(adjustedPlayHeight)
 		// screenAspectRatio = screenWidth / screenHeight, which means:
 		screenWidth = int(float64(screenHeight) * screenAspectRatio)
 	}
