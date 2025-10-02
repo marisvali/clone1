@@ -127,12 +127,44 @@ func (g *Gui) DrawPlayRegion(screen *ebiten.Image) {
 }
 
 func (g *Gui) DrawDebugControlsHorizontal(screen *ebiten.Image) {
+	// Background of playback bar.
 	screen.Fill(color.NRGBA{
-		R: 0,
-		G: 255,
-		B: 0,
+		R: 200,
+		G: 200,
+		B: 200,
 		A: 255,
 	})
+
+	// Play/pause button.
+	playbarHeight := screen.Bounds().Dy()
+	playButtonWidth := playbarHeight
+	playButtonHeight := playbarHeight
+	playButton := SubImage(screen,
+		image.Rect(0, 0, playButtonWidth, playButtonHeight))
+	if g.playbackPaused {
+		DrawSpriteStretched(playButton, g.imgPlaybackPlay)
+	} else {
+		DrawSpriteStretched(playButton, g.imgPlaybackPause)
+	}
+	// Remember the region so that Update() can react when it's clicked.
+	g.buttonPlaybackPlay = playButton.Bounds()
+
+	// Play bar.
+	barXMargin := 10
+	barX := playButtonWidth + barXMargin
+	barWidth := screen.Bounds().Dx() - barX - barXMargin
+	bar := SubImage(screen,
+		image.Rect(barX, 0, barX+barWidth, playbarHeight))
+	DrawSpriteStretched(bar, g.imgPlayBar)
+	// Remember the region so that Update() can react when it's clicked.
+	g.buttonPlaybackBar = bar.Bounds()
+
+	// Playback bar cursor.
+	cursorWidth := float64(playbarHeight)
+	cursorHeight := float64(playbarHeight)
+	factor := float64(g.frameIdx) / float64(len(g.playthrough.History))
+	cursorX := factor*float64(g.buttonPlaybackBar.Size().X) - cursorWidth/2
+	DrawSprite(bar, g.imgPlaybackCursor, cursorX, 0, cursorWidth, cursorHeight)
 }
 
 func (g *Gui) DrawDebugControlsVertical(screen *ebiten.Image) {
@@ -334,6 +366,11 @@ func (g *Gui) loadGuiData() {
 		g.img3 = LoadImage(g.FSys, "data/gui/3.png")
 		g.imgFalling = LoadImage(g.FSys, "data/gui/falling.png")
 		g.imgCursor = LoadImage(g.FSys, "data/gui/cursor.png")
+		g.imgPlaybackCursor = LoadImage(g.FSys, "data/gui/playback-cursor.png")
+		g.imgPlaybackPause = LoadImage(g.FSys, "data/gui/playback-pause.png")
+		g.imgPlaybackPlay = LoadImage(g.FSys, "data/gui/playback-play.png")
+		g.imgPlayBar = LoadImage(g.FSys, "data/gui/playbar.png")
+
 		if CheckFailed == nil {
 			break
 		}

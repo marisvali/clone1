@@ -6,6 +6,7 @@ import (
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/opentype"
+	"image"
 	_ "image/png"
 	"os"
 )
@@ -30,26 +31,33 @@ const (
 )
 
 type Gui struct {
-	layout            Pt
-	world             World
-	FSys              FS
-	imgBlank          *ebiten.Image
-	img1              *ebiten.Image
-	img2              *ebiten.Image
-	img3              *ebiten.Image
-	imgFalling        *ebiten.Image
-	imgCursor         *ebiten.Image
-	folderWatcher1    FolderWatcher
-	defaultFont       font.Face
-	screenWidth       int64
-	screenHeight      int64
-	playthrough       Playthrough
-	recordingFile     string
-	frameIdx          int64
-	state             GameState
-	mousePt           Pt // mouse position in this frame
-	debugMarginWidth  int64
-	debugMarginHeight int64
+	layout             Pt
+	world              World
+	FSys               FS
+	imgBlank           *ebiten.Image
+	img1               *ebiten.Image
+	img2               *ebiten.Image
+	img3               *ebiten.Image
+	imgFalling         *ebiten.Image
+	imgCursor          *ebiten.Image
+	imgPlaybackCursor  *ebiten.Image
+	imgPlaybackPause   *ebiten.Image
+	imgPlaybackPlay    *ebiten.Image
+	imgPlayBar         *ebiten.Image
+	folderWatcher1     FolderWatcher
+	defaultFont        font.Face
+	screenWidth        int64
+	screenHeight       int64
+	playthrough        Playthrough
+	recordingFile      string
+	frameIdx           int64
+	state              GameState
+	mousePt            Pt // mouse position in this frame
+	debugMarginWidth   int64
+	debugMarginHeight  int64
+	playbackPaused     bool
+	buttonPlaybackPlay image.Rectangle
+	buttonPlaybackBar  image.Rectangle
 }
 
 func main() {
@@ -60,8 +68,8 @@ func main() {
 	g.playthrough.InputVersion = InputVersion
 	g.playthrough.SimulationVersion = 0 // SimulationVersion
 	g.playthrough.ReleaseVersion = 0    // ReleaseVersion
-	g.debugMarginWidth = 10
-	g.debugMarginHeight = 200
+	g.debugMarginWidth = 0
+	g.debugMarginHeight = 100
 	g.recordingFile = "last-recording.clone1"
 	g.state = GameOngoing
 	g.state = Playback
