@@ -29,6 +29,13 @@ func (g *Gui) UpdateGameOngoing() {
 	input.Pos = g.screenToPlayCoord(input.Pos)
 	input.JustPressed = inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft)
 	input.JustReleased = inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft)
+	justPressedKeys := inpututil.AppendJustPressedKeys(nil)
+	if slices.Contains(justPressedKeys, ebiten.KeyR) {
+		input.ResetWorld = true
+	}
+	if slices.Contains(justPressedKeys, ebiten.KeyC) {
+		input.TriggerComingUp = true
+	}
 
 	// Save the input in the playthrough.
 	g.playthrough.History = append(g.playthrough.History, input)

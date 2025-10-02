@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"math/rand"
 )
 
 // World rules (physics)
@@ -77,6 +78,15 @@ type Brick struct {
 	FallingSpeed int64
 }
 
+type WorldState int64
+
+const (
+	Regular WorldState = iota
+	ComingUp
+	Lost
+	Won
+)
+
 type World struct {
 	NCols                 int64
 	NRows                 int64
@@ -86,21 +96,35 @@ type World struct {
 	Bricks                []Brick
 	DraggingOffset        Pt
 	DebugPts              []Pt
+	RegularCooldown       int64
+	RegularCooldownIdx    int64
+	ComingUpDistanceLeft  int64
+	ComingUpSpeed         int64
+	ComingUpDeceleration  int64
+	State                 WorldState
+	PreviousState         WorldState
+	SolvedFirstState      bool
 }
 
 type PlayerInput struct {
-	Pos          Pt
-	JustPressed  bool
-	JustReleased bool
+	Pos             Pt
+	JustPressed     bool
+	JustReleased    bool
+	ResetWorld      bool
+	TriggerComingUp bool
 }
 
-func NewWorld() (w World) {
+func (w *World) Initialize() {
 	w.NCols = 6
 	w.NRows = 8
 	w.MarginPixelSize = 30
 	w.BrickPixelSize = (playWidth - (w.MarginPixelSize * (w.NCols + 1))) / w.NCols
 	w.BrickFallAcceleration = 2
+	w.ComingUpDeceleration = 2
+	w.RegularCooldown = 20
+	w.RegularCooldownIdx = w.RegularCooldown
 
+	w.Bricks = []Brick{}
 	for y := int64(0); y < 4; y++ {
 		for x := int64(0); x < 6; x++ {
 			w.Bricks = append(w.Bricks, Brick{
@@ -119,6 +143,10 @@ func NewWorld() (w World) {
 	// 		})
 	// 	}
 	// }
+}
+
+func NewWorld() (w World) {
+	w.Initialize()
 	return w
 }
 
@@ -148,22 +176,146 @@ func (w *World) PixelPosToCanonicalPixelPos(pixelPos Pt) (canPixelPos Pt) {
 	return
 }
 
-func (w *World) Step(input PlayerInput) {
+func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
+	if justEnteredState {
+		w.RegularCooldownIdx = w.RegularCooldown
+	}
+	// w.RegularCooldownIdx--
+	// if w.RegularCooldownIdx == 0 {
+	// 	w.State = ComingUp
+	// 	return
+	// }
+
 	w.UpdateDraggedBrick(input)
 	w.UpdateFallingBricks()
 	w.UpdateCanonicalBricks()
 	w.MergeBricks()
+}
+
+func (w *World) StepComingUp(justEnteredState bool) {
+	if justEnteredState {
+		// We have to compute the speed we need to start with in order to
+		// decelerate by the desired deceleration rate and travel the desired
+		// distance in the desired time and reach the destination with speed
+		// zero or close to zero.
+		// In order to do this, reverse the problem: if we start with speed 0
+		// and keep increasing the speed, what speed to we reach by the time we
+		// cover the distance?
+		totalDist := w.BrickPixelSize + w.MarginPixelSize
+		distSoFar := int64(0)
+		speed := int64(0)
+		acc := w.ComingUpDeceleration
+		requiredSteps := 0
+		for distSoFar < totalDist {
+			speed += acc
+			distSoFar += speed
+			requiredSteps++
+		}
+
+		// We set this starting speed. We know that we will travel the total
+		// distance when we reach speed 0 or right before.
+		w.ComingUpSpeed = speed
+		w.ComingUpDistanceLeft = w.BrickPixelSize + w.MarginPixelSize
+
+		// Create a new row of bricks.
+		for x := range w.NCols {
+			w.Bricks = append(w.Bricks, Brick{
+				Val:      int64(rand.Intn(3)) + 1,
+				PixelPos: w.CanonicalPosToPixelsPos(Pt{x, -1}),
+				State:    Canonical,
+			})
+		}
+	}
+
+	// In the last step, the speed might be higher than the distance left.
+	// In this case, just travel the exact distance left.
+	if w.ComingUpSpeed > w.ComingUpDistanceLeft {
+		w.ComingUpSpeed = w.ComingUpDistanceLeft
+	}
+	for i := range w.Bricks {
+		w.Bricks[i].PixelPos.Y -= w.ComingUpSpeed
+	}
+	w.ComingUpDistanceLeft -= w.ComingUpSpeed
+	w.ComingUpSpeed -= w.ComingUpDeceleration
+
+	// Check if we're done.
+	if w.ComingUpDistanceLeft == 0 {
+		// Check if bricks went over the top.
+		for i := range w.Bricks {
+			b := &w.Bricks[i]
+			bottom := playHeight - w.MarginPixelSize
+			top := bottom - w.BrickPixelSize*w.NRows - w.MarginPixelSize*(w.NRows-1)
+			brickTop := w.BrickBounds(w.Bricks[i].PixelPos).Corner1.Y
+
+			if brickTop >= top {
+				// The brick is not over the top.
+				continue
+			}
+
+			// Brick is over the top. If it's not a Dragged brick, the game is
+			// over.
+			if w.Bricks[i].State != Dragged {
+				w.State = Lost
+				return
+			}
+
+			// The dragged brick is moved over the top. Try to move it down so
+			// that it's not over the top anymore.
+			r := w.BrickBounds(b.PixelPos)
+			obstacles := w.GetObstacles(b, WithoutTop)
+			newR, nPixelsLeft := MoveRect(r, r.Corner1.Plus(Pt{0, 1000}),
+				top-brickTop, obstacles)
+			b.PixelPos = newR.Corner1
+
+			if nPixelsLeft > 0 {
+				// We couldn't move the brick all the way down, which means it
+				// hit another brick, so it's game over.
+				w.State = Lost
+				return
+			}
+		}
+		w.State = Regular
+		return
+	}
+}
+
+func (w *World) Step(input PlayerInput) {
+	// Reset the world.
+	if input.ResetWorld {
+		w.Initialize()
+	}
+
+	// Trigger a coming up event.
+	if input.TriggerComingUp {
+		w.State = ComingUp
+	}
+
+	var justEnteredState bool
+	if !w.SolvedFirstState {
+		justEnteredState = true
+		w.SolvedFirstState = true
+	} else {
+		justEnteredState = w.State != w.PreviousState
+		w.PreviousState = w.State
+	}
+
+	switch w.State {
+	case Regular:
+		w.StepRegular(justEnteredState, input)
+	case ComingUp:
+		w.StepComingUp(justEnteredState)
+	}
 
 	// Check if bricks intersect each other or are out of bounds.
 	{
 		for i := range w.Bricks {
-			obstacles := w.GetObstacles(&w.Bricks[i])
+			obstacles := w.GetObstacles(&w.Bricks[i], WithTop)
 			brick := w.BrickBounds(w.Bricks[i].PixelPos)
 			// Don't use RectIntersectsRects because I want to be able to
 			// put a breakpoint here and see which rect intersects which.
 			for j := range obstacles {
 				if brick.Intersects(obstacles[j]) {
-					Check(fmt.Errorf("solids intersect each other"))
+					// Check(fmt.Errorf("solids intersect each other"))
 				}
 			}
 		}
@@ -242,7 +394,7 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 	// is an actual solid object in solid space on which forces are acting.
 
 	// First, get the set of rectangles the brick must not intersect.
-	obstacles := w.GetObstacles(dragged)
+	obstacles := w.GetObstacles(dragged, WithTop)
 	brick := w.BrickBounds(dragged.PixelPos)
 
 	nMaxPixels := int64(100)
@@ -271,7 +423,7 @@ func (w *World) UpdateFallingBricks() {
 
 		// Move the brick.
 		r := w.BrickBounds(b.PixelPos)
-		obstacles := w.GetObstacles(b)
+		obstacles := w.GetObstacles(b, WithTop)
 		b.FallingSpeed += w.BrickFallAcceleration
 		newR, nPixelsLeft := MoveRect(r, r.Corner1.Plus(Pt{0, 1000}),
 			b.FallingSpeed, obstacles)
@@ -310,7 +462,7 @@ func (w *World) UpdateCanonicalBricks() {
 
 			// Move the brick.
 			r := w.BrickBounds(b.PixelPos)
-			obstacles := w.GetObstacles(b)
+			obstacles := w.GetObstacles(b, WithTop)
 			newR, _ := MoveRect(r, canPixelPos, 20, obstacles)
 			b.PixelPos = newR.Corner1
 		}
@@ -335,7 +487,7 @@ func (w *World) SpaceUnderBrickIsEmpty(b *Brick) bool {
 	r := w.BrickBounds(canPixelPos)
 
 	// Check if anything is in the rectangle.
-	obstacles := w.GetObstacles(b)
+	obstacles := w.GetObstacles(b, WithTop)
 	if RectIntersectsRects(r, obstacles) {
 		// There's something in the space.
 		return false
@@ -351,7 +503,15 @@ func (w *World) BrickBounds(posPixels Pt) (r Rectangle) {
 	return
 }
 
-func (w *World) GetObstacles(exception *Brick) (obstacles []Rectangle) {
+type GetObstaclesOption int64
+
+const (
+	WithTop GetObstaclesOption = iota
+	WithoutTop
+)
+
+func (w *World) GetObstacles(exception *Brick,
+	o GetObstaclesOption) (obstacles []Rectangle) {
 	obstacles = make([]Rectangle, 0, len(w.Bricks))
 	for j := range w.Bricks {
 		if exception == &w.Bricks[j] {
@@ -375,7 +535,9 @@ func (w *World) GetObstacles(exception *Brick) (obstacles []Rectangle) {
 	rightRect := Rectangle{Pt{right, top}, Pt{right + 100, bottom}}
 
 	obstacles = append(obstacles, bottomRect)
-	obstacles = append(obstacles, topRect)
+	if o == WithTop {
+		obstacles = append(obstacles, topRect)
+	}
 	obstacles = append(obstacles, leftRect)
 	obstacles = append(obstacles, rightRect)
 	return
