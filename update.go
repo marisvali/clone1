@@ -3,10 +3,16 @@ package main
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"image"
 	"slices"
 )
 
 func (g *Gui) Update() error {
+	g.pressedKeys = g.pressedKeys[:0]
+	g.pressedKeys = inpututil.AppendPressedKeys(g.pressedKeys)
+	g.justPressedKeys = g.justPressedKeys[:0]
+	g.justPressedKeys = inpututil.AppendJustPressedKeys(g.justPressedKeys)
+
 	switch g.state {
 	case GameOngoing:
 		g.UpdateGameOngoing()
@@ -55,20 +61,130 @@ func (g *Gui) UpdateGameOngoing() {
 	g.frameIdx++
 }
 
-func (g *Gui) UpdatePlayback() {
-	// Don't do anything if we reached the end, don't allow anymore updates on
-	// the world.
-	if g.frameIdx < int64(len(g.playthrough.History)) {
-		// Get the input from the playthrough.
-		input := g.playthrough.History[g.frameIdx]
+func (g *Gui) Pressed(key ebiten.Key) bool {
+	return slices.Contains(g.pressedKeys, key)
+}
 
-		// Remember cursor position in order to draw the virtual cursor during
-		// Draw().
-		g.mousePt = input.Pos
-		// Step the world.
+func (g *Gui) JustPressed(key ebiten.Key) bool {
+	return slices.Contains(g.justPressedKeys, key)
+}
+
+func ImageRectContainsPt(r image.Rectangle, pt image.Point) bool {
+	return pt.X >= r.Min.X && pt.X <= r.Max.X && pt.Y >= r.Min.Y && pt.Y <= r.Max.Y
+}
+
+func (g *Gui) JustClicked(button image.Rectangle) bool {
+	if !inpututil.IsMouseButtonJustPressed(ebiten.MouseButton0) {
+		return false
+	}
+	x, y := ebiten.CursorPosition()
+	return ImageRectContainsPt(button, image.Pt(x, y))
+}
+
+func (g *Gui) LeftClickPressedOn(button image.Rectangle) bool {
+	if !ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
+		return false
+	}
+	x, y := ebiten.CursorPosition()
+	return ImageRectContainsPt(button, image.Pt(x, y))
+}
+
+func (g *Gui) UpdatePlayback() {
+	nFrames := int64(len(g.playthrough.History))
+
+	userRequestedPlaybackPause := g.JustPressed(ebiten.KeySpace) || g.JustClicked(g.buttonPlaybackPlay)
+	if userRequestedPlaybackPause {
+		g.playbackPaused = !g.playbackPaused
+	}
+
+	// Choose target frame.
+	targetFrameIdx := g.frameIdx
+
+	// Compute the target frame index based on where on the play bar the user
+	// clicked.
+	if g.LeftClickPressedOn(g.buttonPlaybackBar) {
+		// Get the distance between the start and the cursor on the play bar.
+		x, _ := ebiten.CursorPosition()
+		dx := int64(x - g.buttonPlaybackBar.Min.X)
+		targetFrameIdx = dx * nFrames / int64(g.buttonPlaybackBar.Size().X)
+	}
+
+	if g.JustPressed(ebiten.KeyLeft) && g.Pressed(ebiten.KeyAlt) {
+		targetFrameIdx -= g.FrameSkipAltArrow
+	}
+
+	if g.JustPressed(ebiten.KeyRight) && g.Pressed(ebiten.KeyAlt) {
+		targetFrameIdx += g.FrameSkipAltArrow
+	}
+
+	if g.Pressed(ebiten.KeyLeft) && g.Pressed(ebiten.KeyShift) {
+		targetFrameIdx -= g.FrameSkipShiftArrow
+	}
+
+	if g.Pressed(ebiten.KeyRight) && g.Pressed(ebiten.KeyShift) {
+		targetFrameIdx += g.FrameSkipShiftArrow
+	}
+
+	if g.Pressed(ebiten.KeyLeft) && !g.Pressed(ebiten.KeyShift) && !g.Pressed(ebiten.KeyAlt) {
+		if g.playbackPaused {
+			targetFrameIdx -= g.FrameSkipArrow
+		} else {
+			targetFrameIdx -= g.FrameSkipArrow * 2
+		}
+	}
+
+	if g.Pressed(ebiten.KeyRight) && !g.Pressed(ebiten.KeyShift) && !g.Pressed(ebiten.KeyAlt) {
+		targetFrameIdx += g.FrameSkipArrow
+	}
+
+	if g.Pressed(ebiten.KeyX) {
+		w1 := NewWorld()
+		for i := int64(0); i < nFrames-1; i++ {
+			w1.Step(g.playthrough.History[i])
+		}
+
+		w2 := NewWorld()
+		for i := int64(0); i < nFrames-1; i++ {
+			w2.Step(g.playthrough.History[i])
+		}
+
+		println("got here")
+	}
+
+	if targetFrameIdx < 0 {
+		targetFrameIdx = 0
+	}
+
+	if targetFrameIdx >= nFrames {
+		targetFrameIdx = nFrames - 1
+	}
+
+	if targetFrameIdx != g.frameIdx {
+		// Rewind.
+		g.world = NewWorld()
+
+		// Replay the world.
+		for i := int64(0); i < targetFrameIdx; i++ {
+			g.world.Step(g.playthrough.History[i])
+		}
+
+		// Set the current frame idx.
+		g.frameIdx = targetFrameIdx
+	}
+
+	// Get input from recording.
+	input := g.playthrough.History[g.frameIdx]
+	// Remember cursor position in order to draw the virtual cursor during
+	// Draw().
+	g.mousePt = input.Pos
+
+	// input = g.ai.Step(&g.world)
+	if !g.playbackPaused {
 		g.world.Step(input)
-		// Finally increase the frame.
-		g.frameIdx++
+
+		if g.frameIdx < nFrames-1 {
+			g.frameIdx++
+		}
 	}
 }
 

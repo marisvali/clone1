@@ -19,15 +19,8 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 		A: 255,
 	})
 
-	adjustedPlayWidth := playWidth
-	adjustedPlayHeight := playHeight
-	if g.state == Playback || g.state == DebugCrash {
-		adjustedPlayWidth += g.debugMarginWidth
-		adjustedPlayHeight += g.debugMarginHeight
-	}
-
-	marginX := (int64(screen.Bounds().Size().X) - adjustedPlayWidth) / 2
-	marginY := (int64(screen.Bounds().Size().Y) - adjustedPlayHeight) / 2
+	marginX := (int64(screen.Bounds().Size().X) - g.adjustedPlayWidth) / 2
+	marginY := (int64(screen.Bounds().Size().Y) - g.adjustedPlayHeight) / 2
 
 	play := SubImage(screen, image.Rect(
 		int(marginX),
@@ -39,14 +32,14 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 	debugHorizontal := SubImage(screen, image.Rect(
 		int(marginX),
 		int(marginY+playHeight),
-		int(marginX+adjustedPlayWidth),
-		int(marginY+adjustedPlayHeight)))
+		int(marginX+g.adjustedPlayWidth),
+		int(marginY+g.adjustedPlayHeight)))
 	g.DrawDebugControlsHorizontal(debugHorizontal)
 
 	debugVertical := SubImage(screen, image.Rect(
 		int(marginX+playWidth),
 		int(marginY),
-		int(marginX+adjustedPlayWidth),
+		int(marginX+g.adjustedPlayWidth),
 		int(marginY+playHeight)))
 	g.DrawDebugControlsVertical(debugVertical)
 
@@ -295,12 +288,7 @@ func (g *Gui) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight
 	// - The mechanism above guarantees a region of playWidth x playHeight.
 	// - The easiest way to add space for my controls is to add margins to
 	// playWidth and playHeight.
-	adjustedPlayWidth := playWidth
-	adjustedPlayHeight := playHeight
-	if g.state == Playback || g.state == DebugCrash {
-		adjustedPlayWidth += g.debugMarginWidth
-		adjustedPlayHeight += g.debugMarginHeight
-	}
+	// - Simply use g.adjustedPlayWith and g.adjustedPlayHeight.
 
 	// Find out if we need to match the screen width to the play width or the
 	// screen height to the play height.
@@ -316,13 +304,13 @@ func (g *Gui) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight
 	// I want play to fit inside screen, so screen is A and play is B.
 	outsideAspectRatio := float64(outsideWidth) / float64(outsideHeight)
 	screenAspectRatio := outsideAspectRatio
-	playAspectRatio := float64(adjustedPlayWidth) / float64(adjustedPlayHeight)
+	playAspectRatio := float64(g.adjustedPlayWidth) / float64(g.adjustedPlayHeight)
 	if screenAspectRatio < playAspectRatio {
-		screenWidth = int(adjustedPlayWidth)
+		screenWidth = int(g.adjustedPlayWidth)
 		// screenAspectRatio = screenWidth / screenHeight, which means:
 		screenHeight = int(float64(screenWidth) / screenAspectRatio)
 	} else {
-		screenHeight = int(adjustedPlayHeight)
+		screenHeight = int(g.adjustedPlayHeight)
 		// screenAspectRatio = screenWidth / screenHeight, which means:
 		screenWidth = int(float64(screenHeight) * screenAspectRatio)
 	}
@@ -391,16 +379,16 @@ func (g *Gui) updateWindowSize() {
 }
 
 func (g *Gui) screenToPlayCoord(pt Pt) Pt {
-	marginX := (g.screenWidth - playWidth) / 2
-	marginY := (g.screenHeight - playHeight) / 2
+	marginX := (g.screenWidth - g.adjustedPlayWidth) / 2
+	marginY := (g.screenHeight - g.adjustedPlayHeight) / 2
 	pt.X -= marginX
 	pt.Y -= marginY
 	return pt
 }
 
 func (g *Gui) playToScreenCoord(pt Pt) Pt {
-	marginX := (g.screenWidth - playWidth) / 2
-	marginY := (g.screenHeight - playHeight) / 2
+	marginX := (g.screenWidth - g.adjustedPlayWidth) / 2
+	marginY := (g.screenHeight - g.adjustedPlayHeight) / 2
 	pt.X += marginX
 	pt.Y += marginY
 	return pt

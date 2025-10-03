@@ -31,33 +31,40 @@ const (
 )
 
 type Gui struct {
-	layout             Pt
-	world              World
-	FSys               FS
-	imgBlank           *ebiten.Image
-	img1               *ebiten.Image
-	img2               *ebiten.Image
-	img3               *ebiten.Image
-	imgFalling         *ebiten.Image
-	imgCursor          *ebiten.Image
-	imgPlaybackCursor  *ebiten.Image
-	imgPlaybackPause   *ebiten.Image
-	imgPlaybackPlay    *ebiten.Image
-	imgPlayBar         *ebiten.Image
-	folderWatcher1     FolderWatcher
-	defaultFont        font.Face
-	screenWidth        int64
-	screenHeight       int64
-	playthrough        Playthrough
-	recordingFile      string
-	frameIdx           int64
-	state              GameState
-	mousePt            Pt // mouse position in this frame
-	debugMarginWidth   int64
-	debugMarginHeight  int64
-	playbackPaused     bool
-	buttonPlaybackPlay image.Rectangle
-	buttonPlaybackBar  image.Rectangle
+	layout              Pt
+	world               World
+	FSys                FS
+	imgBlank            *ebiten.Image
+	img1                *ebiten.Image
+	img2                *ebiten.Image
+	img3                *ebiten.Image
+	imgFalling          *ebiten.Image
+	imgCursor           *ebiten.Image
+	imgPlaybackCursor   *ebiten.Image
+	imgPlaybackPause    *ebiten.Image
+	imgPlaybackPlay     *ebiten.Image
+	imgPlayBar          *ebiten.Image
+	folderWatcher1      FolderWatcher
+	defaultFont         font.Face
+	screenWidth         int64
+	screenHeight        int64
+	playthrough         Playthrough
+	recordingFile       string
+	frameIdx            int64
+	state               GameState
+	mousePt             Pt // mouse position in this frame
+	debugMarginWidth    int64
+	debugMarginHeight   int64
+	playbackPaused      bool
+	buttonPlaybackPlay  image.Rectangle
+	buttonPlaybackBar   image.Rectangle
+	pressedKeys         []ebiten.Key
+	justPressedKeys     []ebiten.Key // keys pressed in this frame
+	FrameSkipAltArrow   int64
+	FrameSkipShiftArrow int64
+	FrameSkipArrow      int64
+	adjustedPlayWidth   int64
+	adjustedPlayHeight  int64
 }
 
 func main() {
@@ -71,11 +78,20 @@ func main() {
 	g.debugMarginWidth = 0
 	g.debugMarginHeight = 100
 	g.recordingFile = "last-recording.clone1"
+	g.adjustedPlayWidth = playWidth
+	g.adjustedPlayHeight = playHeight
+	g.FrameSkipAltArrow = 100
+	g.FrameSkipShiftArrow = 10
+	g.FrameSkipArrow = 1
 	g.state = GameOngoing
 	g.state = Playback
+
 	if g.state == Playback || g.state == DebugCrash {
 		g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))
+		g.adjustedPlayWidth += g.debugMarginWidth
+		g.adjustedPlayHeight += g.debugMarginHeight
 	}
+
 	if g.state == DebugCrash {
 		// Don't crash when we are debugging the crash. This is useful if the
 		// crash was caused by one of my asserts:

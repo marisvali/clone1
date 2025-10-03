@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"math"
-	"math/rand"
 )
 
 // World rules (physics)
@@ -88,6 +87,7 @@ const (
 )
 
 type World struct {
+	Rand
 	NCols                 int64
 	NRows                 int64
 	BrickPixelSize        int64
@@ -115,6 +115,7 @@ type PlayerInput struct {
 }
 
 func (w *World) Initialize() {
+	w.RSeed(0)
 	w.NCols = 6
 	w.NRows = 8
 	w.MarginPixelSize = 30
@@ -220,7 +221,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 		// Create a new row of bricks.
 		for x := range w.NCols {
 			w.Bricks = append(w.Bricks, Brick{
-				Val:      int64(rand.Intn(3)) + 1,
+				Val:      w.RInt(1, 3),
 				PixelPos: w.CanonicalPosToPixelsPos(Pt{x, -1}),
 				State:    Canonical,
 			})
