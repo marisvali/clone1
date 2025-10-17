@@ -137,20 +137,6 @@ func (g *Gui) UpdatePlayback() {
 		targetFrameIdx += g.FrameSkipArrow
 	}
 
-	if g.Pressed(ebiten.KeyX) {
-		w1 := NewWorld()
-		for i := int64(0); i < nFrames-1; i++ {
-			w1.Step(g.playthrough.History[i])
-		}
-
-		w2 := NewWorld()
-		for i := int64(0); i < nFrames-1; i++ {
-			w2.Step(g.playthrough.History[i])
-		}
-
-		println("got here")
-	}
-
 	if targetFrameIdx < 0 {
 		targetFrameIdx = 0
 	}
@@ -185,6 +171,10 @@ func (g *Gui) UpdatePlayback() {
 		if g.frameIdx < nFrames-1 {
 			g.frameIdx++
 		}
+	}
+
+	if g.world.AssertionFailed {
+		g.playbackPaused = true
 	}
 }
 

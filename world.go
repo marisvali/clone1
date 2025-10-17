@@ -104,6 +104,7 @@ type World struct {
 	State                 WorldState
 	PreviousState         WorldState
 	SolvedFirstState      bool
+	AssertionFailed       bool
 }
 
 type PlayerInput struct {
@@ -129,7 +130,7 @@ func (w *World) Initialize() {
 	for y := int64(0); y < 4; y++ {
 		for x := int64(0); x < 6; x++ {
 			w.Bricks = append(w.Bricks, Brick{
-				Val:      (x+y)%3 + 1,
+				Val:      (x*y)%10 + 1,
 				PixelPos: w.CanonicalPosToPixelsPos(Pt{x, y}),
 				State:    Canonical,
 			})
@@ -191,6 +192,22 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 	w.UpdateFallingBricks()
 	w.UpdateCanonicalBricks()
 	w.MergeBricks()
+
+	// Check if bricks intersect each other or are out of bounds.
+	{
+		for i := range w.Bricks {
+			obstacles := w.GetObstacles(&w.Bricks[i], WithTop)
+			brick := w.BrickBounds(w.Bricks[i].PixelPos)
+			// Don't use RectIntersectsRects because I want to be able to
+			// put a breakpoint here and see which rect intersects which.
+			for j := range obstacles {
+				if brick.Intersects(obstacles[j]) {
+					// Check(fmt.Errorf("solids intersect each other"))
+					w.AssertionFailed = true
+				}
+			}
+		}
+	}
 }
 
 func (w *World) StepComingUp(justEnteredState bool) {
@@ -305,21 +322,6 @@ func (w *World) Step(input PlayerInput) {
 		w.StepRegular(justEnteredState, input)
 	case ComingUp:
 		w.StepComingUp(justEnteredState)
-	}
-
-	// Check if bricks intersect each other or are out of bounds.
-	{
-		for i := range w.Bricks {
-			obstacles := w.GetObstacles(&w.Bricks[i], WithTop)
-			brick := w.BrickBounds(w.Bricks[i].PixelPos)
-			// Don't use RectIntersectsRects because I want to be able to
-			// put a breakpoint here and see which rect intersects which.
-			for j := range obstacles {
-				if brick.Intersects(obstacles[j]) {
-					// Check(fmt.Errorf("solids intersect each other"))
-				}
-			}
-		}
 	}
 }
 

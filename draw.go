@@ -175,15 +175,7 @@ func (g *Gui) DrawBricks(play *ebiten.Image, s BrickState) {
 			continue
 		}
 		pos := b.PixelPos
-		var img *ebiten.Image
-		switch b.Val {
-		case 1:
-			img = g.img1
-		case 2:
-			img = g.img2
-		case 3:
-			img = g.img3
-		}
+		img := g.imgBrick[b.Val]
 		DrawSprite(play, img, float64(pos.X), float64(pos.Y),
 			float64(g.world.BrickPixelSize),
 			float64(g.world.BrickPixelSize))
@@ -349,9 +341,10 @@ func (g *Gui) loadGuiData() {
 	for {
 		CheckFailed = nil
 		g.imgBlank = LoadImage(g.FSys, "data/gui/blank.png")
-		g.img1 = LoadImage(g.FSys, "data/gui/1.png")
-		g.img2 = LoadImage(g.FSys, "data/gui/2.png")
-		g.img3 = LoadImage(g.FSys, "data/gui/3.png")
+		for i := 1; i <= 10; i++ {
+			filename := fmt.Sprintf("data/gui/%02d.png", i)
+			g.imgBrick[i] = LoadImage(g.FSys, filename)
+		}
 		g.imgFalling = LoadImage(g.FSys, "data/gui/falling.png")
 		g.imgCursor = LoadImage(g.FSys, "data/gui/cursor.png")
 		g.imgPlaybackCursor = LoadImage(g.FSys, "data/gui/playback-cursor.png")

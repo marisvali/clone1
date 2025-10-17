@@ -35,9 +35,7 @@ type Gui struct {
 	world               World
 	FSys                FS
 	imgBlank            *ebiten.Image
-	img1                *ebiten.Image
-	img2                *ebiten.Image
-	img3                *ebiten.Image
+	imgBrick            [31]*ebiten.Image
 	imgFalling          *ebiten.Image
 	imgCursor           *ebiten.Image
 	imgPlaybackCursor   *ebiten.Image
@@ -77,14 +75,14 @@ func main() {
 	g.playthrough.ReleaseVersion = 0    // ReleaseVersion
 	g.debugMarginWidth = 0
 	g.debugMarginHeight = 100
-	g.recordingFile = "last-recording.clone1"
+	// g.recordingFile = "last-recording.clone1"
 	g.adjustedPlayWidth = playWidth
 	g.adjustedPlayHeight = playHeight
-	g.FrameSkipAltArrow = 100
+	g.FrameSkipAltArrow = 1
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
 	g.state = GameOngoing
-	g.state = Playback
+	// g.state = Playback
 
 	if g.state == Playback || g.state == DebugCrash {
 		g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))
