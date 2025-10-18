@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"sort"
 )
 
 // World rules (physics)
@@ -459,15 +460,56 @@ func (w *World) UpdateCanonicalBricks() {
 		if w.AtCanonicalPosition(b) && w.SpaceUnderBrickIsEmpty(b) {
 			b.State = Falling
 			b.FallingSpeed = 0
-		} else {
-			// Go towards the closest canonical pos.
-			canPixelPos := w.PixelPosToCanonicalPixelPos(b.PixelPos)
+		}
+	}
 
-			// Move the brick.
-			r := w.BrickBounds(b.PixelPos)
-			obstacles := w.GetObstacles(b, WithTop)
-			newR, _ := MoveRect(r, canPixelPos, 20, obstacles)
-			b.PixelPos = newR.Corner1
+	// Decide for each canonical brick what its target position is.
+	// Assign each brick to a column.
+	columns := make([][]*Brick, w.NCols)
+	for i := range w.Bricks {
+		b := &w.Bricks[i]
+
+		// Skip non-canonical bricks.
+		if b.State != Canonical {
+			continue
+		}
+
+		canPos := w.PixelsPosToCanonicalPos(b.PixelPos)
+		columns[canPos.X] = append(columns[canPos.X], b)
+	}
+
+	// Go column by column.
+	for _, column := range columns {
+		// Sort bricks in the column by their Y position, so that we can iterate
+		// through bricks from bottom to top.
+		sort.Slice(column, func(i, j int) bool {
+			return column[i].PixelPos.Y > column[j].PixelPos.Y
+		})
+
+		lastTargetCanPos := Pt{-1000, -1000}
+		for i := range column {
+			b := column[i]
+			// Get target pos.
+			targetCanPos := w.PixelsPosToCanonicalPos(b.PixelPos)
+			// If it intersects with an already decided target pos, go to the
+			// next available canonical target pos. However, we are going from
+			// bottom to top so the only thing it can intersect with is the
+			// previous target pos, and the higher target pos is definitely
+			// available.
+			if targetCanPos == lastTargetCanPos {
+				targetCanPos.Y += 1
+			}
+			lastTargetCanPos = targetCanPos
+			targetPos := w.CanonicalPosToPixelsPos(targetCanPos)
+
+			// Go towards the target pos, without considering any obstacles.
+			// We don't care about intersections because:
+			// - the system of moving canonical bricks aims towards a valid
+			// state where bricks do not intersect each other
+			// - if there are any intersections going on currently between
+			// canonical bricks, they will get solved
+			pts := GetLinePoints(b.PixelPos, targetPos, 21)
+			b.PixelPos = pts[len(pts)-1]
 		}
 	}
 }
