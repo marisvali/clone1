@@ -663,6 +663,10 @@ func (w *World) FindMergingBricks() (foundMerge bool, i, j int) {
 				continue
 			}
 
+			if w.Bricks[i].Val != w.Bricks[j].Val {
+				continue
+			}
+
 			dist := w.Bricks[i].PixelPos.SquaredDistTo(w.Bricks[j].PixelPos)
 			// Two bricks merge if they are close enough for each other.
 			// We decide here what "close enough" means.
