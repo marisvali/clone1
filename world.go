@@ -357,11 +357,21 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 	if input.JustReleased {
 		if dragged != nil {
 			dragged.State = Canonical
+			return
 		}
 	}
 
 	if dragged == nil {
 		return
+	}
+
+	{
+		obstacles := w.GetObstacles(dragged, WithTop)
+		brick := w.BrickBounds(dragged.PixelPos)
+		if RectIntersectsRects(brick, obstacles) {
+			dragged.State = Canonical
+			return
+		}
 	}
 
 	targetPos := input.Pos.Plus(w.DraggingOffset)
