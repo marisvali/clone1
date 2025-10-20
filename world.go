@@ -506,7 +506,7 @@ func (w *World) UpdateCanonicalBricks() {
 			// bottom to top so the only thing it can intersect with is the
 			// previous target pos, and the higher target pos is definitely
 			// available.
-			if targetCanPos == lastTargetCanPos {
+			if targetCanPos == lastTargetCanPos && i > 0 && column[i].Val != column[i-1].Val {
 				targetCanPos.Y += 1
 			}
 			lastTargetCanPos = targetCanPos
