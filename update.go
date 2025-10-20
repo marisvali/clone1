@@ -43,20 +43,40 @@ func (g *Gui) UpdateGameOngoing() {
 		input.TriggerComingUp = true
 	}
 
-	// Save the input in the playthrough.
-	g.playthrough.History = append(g.playthrough.History, input)
-	if g.recordingFile != "" {
-		// IMPORTANT: save the playthrough before stepping the World. If
-		// a bug in the World causes it to crash, we want to save the input
-		// that caused the bug before the program crashes.
-		WriteFile(g.recordingFile, g.playthrough.Serialize())
-	}
-
 	// Remember cursor position in order to draw the virtual cursor during
 	// Draw().
 	g.mousePt = input.Pos
-	// Step the world.
-	g.world.Step(input)
+
+	// We want to slow down the game sometimes by only updating the World once
+	// every n frames. This is very useful when it's necessary to do some tricky
+	// moves in order to trigger an edge case (e.g. drag brick A on top of brick
+	// B while brick C is falling on B). It's hard to do at regular speed and if
+	// we modify the speeds and accelerations within the World, the test isn't
+	// really performed under production conditions.
+	//
+	// If the game is slowed down, remember clicks and key presses that happen
+	// during frames where we don't update the World, so that they can be sent
+	// to the World in the next frame where the World is updated.
+	g.accumulatedInput.Pos = input.Pos
+	g.accumulatedInput.JustPressed = g.accumulatedInput.JustPressed || input.JustPressed
+	g.accumulatedInput.JustReleased = g.accumulatedInput.JustReleased || input.JustReleased
+	g.accumulatedInput.ResetWorld = g.accumulatedInput.ResetWorld || input.ResetWorld
+	g.accumulatedInput.TriggerComingUp = g.accumulatedInput.TriggerComingUp || input.TriggerComingUp
+	if g.frameIdx%g.slowdownFactor == 0 {
+		// Save the input in the playthrough.
+		g.playthrough.History = append(g.playthrough.History, input)
+		if g.recordingFile != "" {
+			// IMPORTANT: save the playthrough before stepping the World. If
+			// a bug in the World causes it to crash, we want to save the input
+			// that caused the bug before the program crashes.
+			WriteFile(g.recordingFile, g.playthrough.Serialize())
+		}
+
+		// Step the world.
+		g.world.Step(g.accumulatedInput)
+		g.accumulatedInput = PlayerInput{}
+	}
+
 	// Finally increase the frame.
 	g.frameIdx++
 }

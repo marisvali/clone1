@@ -63,6 +63,8 @@ type Gui struct {
 	FrameSkipArrow      int64
 	adjustedPlayWidth   int64
 	adjustedPlayHeight  int64
+	accumulatedInput    PlayerInput
+	slowdownFactor      int64 // 1 - does nothing, 2 - game is twice as slow etc
 }
 
 func main() {
@@ -81,6 +83,7 @@ func main() {
 	g.FrameSkipAltArrow = 1
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
+	g.slowdownFactor = 5
 	g.state = GameOngoing
 	// g.state = Playback
 
