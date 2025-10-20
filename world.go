@@ -9,7 +9,9 @@ import (
 // World rules (physics)
 // ---------------------
 //
-// Terminology:
+// Terminology
+// -----------
+//
 // - Slot: the space of the world is a matrix of 6x8 rectangles separated by
 // some margins. These rectangular places are called slots. Some are empty, some
 // will have bricks in them.
@@ -30,15 +32,70 @@ import (
 // - Falling brick: a brick that is not dragged by the player and is currently
 // falling because it has nothing underneath it.
 //
-// The behavior of a canonical brick:
+// High-level approach
+// -------------------
+//
+// We know that in general we want to drag bricks around, have them bump against
+// each other if they are different values, have them merge if they have the
+// same value, have new bricks come up, have bricks fall down if they have
+// nothing underneath.
+//
+// Once we know largely what effect we want to obtain, we can implement it in
+// several ways. The challenge is then to avoid errors in edge cases. For
+// example what if a brick is dragged over a falling brick with the same value,
+// or bricks are coming up right as another brick is falling etc.
+//
+// At first it seemed that one simple rule is to avoid having bricks intersect
+// each other. And one simple way to ensure this is to never 'teleport' a brick,
+// as in, set its position directly. Instead, move every brick by using a
+// function that checks for collisions and stops movement before an intersection
+// occurs. This way, we simply never enter an erroneous state. Of course we need
+// a special exception for bricks that have the same value and move on top of
+// each other. They do not merge immediately when they start intersecting, so we
+// must allow intersection between bricks of the same value.
+//
+// I found that this approach cannot work. The merging mechanics cause at least
+// one edge case where I want to allow an erroneous state to occur:
+// - Let's say I have 3 bricks of the same value: A, B and C.
+// - A is sitting.
+// - B is dragged by the player and intersects A on the left or right side.
+// - C is falling on top of A.
+// When C hits A, they merge and A gets a different value than B. Suddenly, two
+// bricks with different values are overlapping. The issue is that I do not want
+// to prevent this from happening, because it would mean introducing some rule
+// that would make the world act strangely. I could say that a brick may not
+// intersect more than one other brick with the same value, at any one time. But
+// then I can find edge cases where that would be annoying.
+//
+// I want to preserve the effect that bricks of the same value can always go
+// through each other. But when they merge, bricks change their value. This
+// inevitably leads to cases where a previously valid intersection becomes
+// invalid.
+//
+// The conclusion is that a better approach is to have a system that tolerates
+// invalid intersections and solves them as soon as possible, in a way that
+// feels natural. In the end the system was implemented in the behavior of
+// canonical bricks.
+
+// The behavior of canonical bricks
+// --------------------------------
+//
+// - For each canonical brick, we compute its target position. Normally this
+// means the nearest canonical pixel position. However, there will be edge cases
+// where two canonical bricks will have the same nearest canonical pixel
+// position. In those cases, an algorithm decides which brick gets which
+// position. The algorithm is described in more detail in the implementation.
 // - If the brick's pixel position is a canonical pixel position, it doesn't
-// move. Otherwise, it moves towards the nearest canonical pixel position.
+// move. Otherwise, it moves towards the nearest canonical pixel position,
+// disregarding any intersections.
 // - If the slot underneath it is completely empty, it becomes a falling brick.
 // Completely empty means there's no part of another brick (dragged, canonical
 // or falling) in the slot.
 // - If the player clicks it, it becomes a dragged brick.
 //
-// The behavior of a dragged brick:
+// The behavior of a dragged brick
+// -------------------------------
+//
 // - When the player releases the click while dragging a brick, the dragged
 // brick becomes canonical. The behavior of the canonical brick will then take
 // care of putting the brick in the right place.
@@ -49,8 +106,16 @@ import (
 // as long as possible.
 // - The dragged brick goes towards the mouse cursor with some limited speed,
 // it doesn't just teleport to the nearest valid position in a single frame.
+// - The dragged brick doesn't intersect other bricks most of the time, because
+// it stops moving when it hits an obstacle. But it can find itself overlapping
+// a brick that used to be of the same value, but which suddenly just changed
+// value due to a merge. To cover this case, the rule is that a dragged brick
+// that intersects another brick becomes canonical and the player loses control
+// of it.
 //
-// The behavior of a falling brick:
+// The behavior of a falling brick
+// -------------------------------
+//
 // - A falling brick moves down each frame with a limited speed, with
 // acceleration.
 // - A falling brick becomes canonical when it intersects another brick or the
@@ -58,10 +123,19 @@ import (
 // take care of putting the brick in the right place.
 // - A falling brick becomes dragged if the player clicks on it.
 //
-// One important element for making the behavior of the world as bug-free as
-// possible is to never 'teleport' bricks by setting their positions directly.
-// Always move them towards a position. This ensures that bricks will never
-// overlap.
+// Note
+// ----
+//
+// One interesting note: at first, it seemed natural to implement a behavior
+// for each brick type, and have these behaviors generate the desired global
+// effect automatically. It seemed like a natural fit for a Brick interface
+// with a different implementation for a Step/Update function of each brick
+// type. However, for canonical bricks, it proved very useful to have a global
+// algorithm that solves conflicts between canonical bricks. This would have
+// been very difficult to achieve if each canonical brick would decide its
+// behavior for itself in isolation. So having a global function that updates
+// all canonical bricks, and another one that updates all falling bricks for
+// example allowed for a flexibility that paid off significantly.
 
 type BrickState int64
 
@@ -131,12 +205,35 @@ func (w *World) Initialize() {
 	for y := int64(0); y < 4; y++ {
 		for x := int64(0); x < 6; x++ {
 			w.Bricks = append(w.Bricks, Brick{
-				Val:      (x*y)%10 + 1,
+				Val:      (x*y)%3 + 1,
 				PixelPos: w.CanonicalPosToPixelsPos(Pt{x, y}),
 				State:    Canonical,
 			})
 		}
 	}
+	// Test edge case with 4 bricks of the same value.
+	// w.Bricks = []Brick{}
+	// w.Bricks = append(w.Bricks, Brick{
+	// 	Val:      1,
+	// 	PixelPos: w.CanonicalPosToPixelsPos(Pt{0, 0}),
+	// 	State:    Canonical,
+	// })
+	// w.Bricks = append(w.Bricks, Brick{
+	// 	Val:      1,
+	// 	PixelPos: w.CanonicalPosToPixelsPos(Pt{1, 0}),
+	// 	State:    Canonical,
+	// })
+	// w.Bricks = append(w.Bricks, Brick{
+	// 	Val:      1,
+	// 	PixelPos: w.CanonicalPosToPixelsPos(Pt{2, 0}),
+	// 	State:    Canonical,
+	// })
+	// w.Bricks = append(w.Bricks, Brick{
+	// 	Val:      1,
+	// 	PixelPos: w.CanonicalPosToPixelsPos(Pt{0, 7}),
+	// 	State:    Canonical,
+	// })
+	// Test edge case with 3 bricks of the same value.
 	// for y := 0; y < 1; y++ {
 	// 	for x := 0; x < 3; x++ {
 	// 		w.Bricks = append(w.Bricks, Brick{
@@ -183,6 +280,10 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 	if justEnteredState {
 		w.RegularCooldownIdx = w.RegularCooldown
 	}
+
+	// TODO: change this
+	// Disable for now the regular event of bricks coming up, to allow easier
+	// testing during development.
 	// w.RegularCooldownIdx--
 	// if w.RegularCooldownIdx == 0 {
 	// 	w.State = ComingUp
@@ -194,21 +295,25 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 	w.UpdateCanonicalBricks()
 	w.MergeBricks()
 
+	// Disable the check below as we currently do allow intersections to occur
+	// in some cases and the strategy is to recover from them. So "solids
+	// should never intersect" is no longer a valid invariant to check against.
+	//
 	// Check if bricks intersect each other or are out of bounds.
-	{
-		for i := range w.Bricks {
-			obstacles := w.GetObstacles(&w.Bricks[i], WithTop)
-			brick := w.BrickBounds(w.Bricks[i].PixelPos)
-			// Don't use RectIntersectsRects because I want to be able to
-			// put a breakpoint here and see which rect intersects which.
-			for j := range obstacles {
-				if brick.Intersects(obstacles[j]) {
-					// Check(fmt.Errorf("solids intersect each other"))
-					w.AssertionFailed = true
-				}
-			}
-		}
-	}
+	// {
+	// 	for i := range w.Bricks {
+	// 		obstacles := w.GetObstacles(&w.Bricks[i], WithTop)
+	// 		brick := w.BrickBounds(w.Bricks[i].PixelPos)
+	// 		// Don't use RectIntersectsRects because I want to be able to
+	// 		// put a breakpoint here and see which rect intersects which.
+	// 		for j := range obstacles {
+	// 			if brick.Intersects(obstacles[j]) {
+	// 				// Check(fmt.Errorf("solids intersect each other"))
+	// 				w.AssertionFailed = true
+	// 			}
+	// 		}
+	// 	}
+	// }
 }
 
 func (w *World) StepComingUp(justEnteredState bool) {
@@ -324,17 +429,17 @@ func (w *World) Step(input PlayerInput) {
 	case ComingUp:
 		w.StepComingUp(justEnteredState)
 	}
+
+	// The test for game over is currently in StepComingUp.
+	// Consider testing for game over here, as well, or inside StepRegular, just
+	// as an added precaution, even if I can't think of a way in which a game
+	// over could be reached during a StepRegular.
 }
 
 func (w *World) UpdateDraggedBrick(input PlayerInput) {
 	var dragged *Brick
 	for i := range w.Bricks {
 		if w.Bricks[i].State == Dragged {
-			// It should not be possible to be dragging anything already.
-			if dragged != nil {
-				Check(fmt.Errorf("started dragging a brick while another " +
-					"brick was already marked as dragging"))
-			}
 			dragged = &w.Bricks[i]
 		}
 	}
@@ -346,6 +451,13 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 			brickSize := Pt{w.BrickPixelSize, w.BrickPixelSize}
 			r := Rectangle{p, p.Plus(brickSize)}
 			if r.ContainsPt(input.Pos) {
+				// We were dragging a brick but we just clicked on another
+				// brick to start dragging it? This should not be possible.
+				if dragged != nil {
+					Check(fmt.Errorf("started dragging a brick while another " +
+						"brick was already marked as dragging"))
+				}
+
 				w.Bricks[i].State = Dragged
 				dragged = &w.Bricks[i]
 				w.DraggingOffset = p.Minus(input.Pos)
@@ -365,13 +477,15 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 		return
 	}
 
-	{
-		obstacles := w.GetObstacles(dragged, WithTop)
-		brick := w.BrickBounds(dragged.PixelPos)
-		if RectIntersectsRects(brick, obstacles) {
-			dragged.State = Canonical
-			return
-		}
+	// Get the set of rectangles the brick must not intersect.
+	obstacles := w.GetObstacles(dragged, WithTop)
+	brick := w.BrickBounds(dragged.PixelPos)
+
+	// If the dragged brick intersects something, it becomes canonical and the
+	// behavior of canonical bricks will resolve the intersection.
+	if RectIntersectsRects(brick, obstacles) {
+		dragged.State = Canonical
+		return
 	}
 
 	targetPos := input.Pos.Plus(w.DraggingOffset)
@@ -406,10 +520,6 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 	// is very visible if the brick "travels" or "teleports" and the effect of
 	// the brick travelling is more pleasant. It gives more of a feeling that it
 	// is an actual solid object in solid space on which forces are acting.
-
-	// First, get the set of rectangles the brick must not intersect.
-	obstacles := w.GetObstacles(dragged, WithTop)
-	brick := w.BrickBounds(dragged.PixelPos)
 
 	nMaxPixels := int64(100)
 
@@ -473,7 +583,32 @@ func (w *World) UpdateCanonicalBricks() {
 		}
 	}
 
-	// Decide for each canonical brick what its target position is.
+	// Decide the target position for each canonical brick:
+	// - Assign each brick to a column. Usually canonical bricks are firmly in
+	// a column or another. But a dragged brick becomes canonical when released
+	// and it can be released in any position. So we may always have at least
+	// one canonical brick in some non-standard position, e.g. between two
+	// columns. But, even if a brick is between two columns, it is closer to one
+	// than another.
+	// - For the bricks in a column, decide which goes into what position. The
+	// easiest way to do this is to get the bottom one first, decide that one
+	// cannot move any lower, so it gets the bottom position. The next one must
+	// necessarily get the next available position, on top of the first one,
+	// and so on.
+	// - This may result in some bricks moving up in order to fit well with the
+	// others. But normally they will travel a short distance and it should look
+	// natural to the player.
+	// - An exception has to be made for bricks that have the same value. If two
+	// bricks with the same value compete for the same spot, they are allowed to
+	// go for it. This is because they are competing because they are probably
+	// already overlapping significantly, which means a merge is imminent. It
+	// looks a little ridiculous if they go on top of each other, then one falls
+	// on the other and they merge.
+	//
+	// By following this algorithm, we guarantee that bricks end up in valid
+	// positions and any intersections get solved relatively quickly in a way
+	// that feels natural.
+	//
 	// Assign each brick to a column.
 	columns := make([][]*Brick, w.NCols)
 	for i := range w.Bricks {
@@ -485,6 +620,7 @@ func (w *World) UpdateCanonicalBricks() {
 		}
 
 		canPos := w.PixelsPosToCanonicalPos(b.PixelPos)
+		// Possible assert: the column is valid.
 		columns[canPos.X] = append(columns[canPos.X], b)
 	}
 
@@ -506,18 +642,26 @@ func (w *World) UpdateCanonicalBricks() {
 			// bottom to top so the only thing it can intersect with is the
 			// previous target pos, and the higher target pos is definitely
 			// available.
-			if targetCanPos == lastTargetCanPos && i > 0 && column[i].Val != column[i-1].Val {
-				targetCanPos.Y += 1
+			if targetCanPos == lastTargetCanPos {
+				// Only put the brick at a higher pos if it has a different
+				// value than the brick at the current pos. Otherwise, we are
+				// dealing with two bricks of the same value which are
+				// overlapping but not yet merged.
+				// In this case, just let the targetCanPos be the same as the
+				// lastTargetCanPos. This will move the current brick towards
+				// the existing brick and they will soon merge.
+				// If for any reason any of the two bricks changes value in a
+				// future frame (though I can't currently imagine a case where
+				// this happens), then the algorithm will run again and drive
+				// these bricks apart.
+				if i > 0 && column[i].Val != column[i-1].Val {
+					targetCanPos.Y += 1
+				}
 			}
 			lastTargetCanPos = targetCanPos
 			targetPos := w.CanonicalPosToPixelsPos(targetCanPos)
 
 			// Go towards the target pos, without considering any obstacles.
-			// We don't care about intersections because:
-			// - the system of moving canonical bricks aims towards a valid
-			// state where bricks do not intersect each other
-			// - if there are any intersections going on currently between
-			// canonical bricks, they will get solved
 			pts := GetLinePoints(b.PixelPos, targetPos, 21)
 			b.PixelPos = pts[len(pts)-1]
 		}
@@ -618,11 +762,11 @@ func (w *World) MergeBricks() {
 		// brick to get on top of a canonical brick. Less common, but
 		// possible, is to have a falling brick get on top of a dragged
 		// brick. Something that can happen more often that it seems likely,
-		// a canonical brick and move on top of a canonical brick. This is
-		// because the player drags a brick near the one they intend to merge
-		// with and then releases the brick early. The released brick becomes
-		// canonical and is now moving towards the position where the static
-		// brick is.
+		// a canonical brick moves on top of a canonical brick. This is because
+		// the player drags a brick near the one they intend to merge with and
+		// then releases the brick early. The released brick becomes canonical
+		// and is now moving towards the position where the static brick is.
+		//
 		// The way to cover all these cases in one is to detect which of
 		// the two bricks is closer to a canonical position. That one
 		// gets its value increased, the other one disappears. And the
@@ -653,6 +797,7 @@ func (w *World) MergeBricks() {
 
 		brickToUpdate.Val++
 
+		// TODO: change this
 		// Do a loop for now between values as I don't have all the
 		// values and the rules for them are not yet clear.
 		if brickToUpdate.Val > 3 {

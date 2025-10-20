@@ -63,8 +63,9 @@ type Gui struct {
 	FrameSkipArrow      int64
 	adjustedPlayWidth   int64
 	adjustedPlayHeight  int64
-	accumulatedInput    PlayerInput
-	slowdownFactor      int64 // 1 - does nothing, 2 - game is twice as slow etc
+	slowdownFactor      int64       // 1 - does nothing, 2 - game is twice as slow etc
+	accumulatedInput    PlayerInput // only relevant for slowdownFactor > 1, see
+	// the implementation for a more detailed explanation
 }
 
 func main() {
