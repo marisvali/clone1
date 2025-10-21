@@ -180,6 +180,7 @@ type World struct {
 	PreviousState         WorldState
 	SolvedFirstState      bool
 	AssertionFailed       bool
+	MaxBrickValue         int64
 }
 
 type PlayerInput struct {
@@ -194,6 +195,7 @@ func (w *World) Initialize() {
 	w.RSeed(0)
 	w.NCols = 6
 	w.NRows = 8
+	w.MaxBrickValue = 10
 	w.MarginPixelSize = 30
 	w.BrickPixelSize = (playWidth - (w.MarginPixelSize * (w.NCols + 1))) / w.NCols
 	w.BrickFallAcceleration = 2
@@ -205,7 +207,7 @@ func (w *World) Initialize() {
 	for y := int64(0); y < 4; y++ {
 		for x := int64(0); x < 6; x++ {
 			w.Bricks = append(w.Bricks, Brick{
-				Val:      (x*y)%3 + 1,
+				Val:      (x*y)%w.MaxBrickValue + 1,
 				PixelPos: w.CanonicalPosToPixelsPos(Pt{x, y}),
 				State:    Canonical,
 			})
@@ -344,7 +346,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 		// Create a new row of bricks.
 		for x := range w.NCols {
 			w.Bricks = append(w.Bricks, Brick{
-				Val:      w.RInt(1, 3),
+				Val:      w.RInt(1, w.MaxBrickValue),
 				PixelPos: w.CanonicalPosToPixelsPos(Pt{x, -1}),
 				State:    Canonical,
 			})
@@ -800,7 +802,7 @@ func (w *World) MergeBricks() {
 		// TODO: change this
 		// Do a loop for now between values as I don't have all the
 		// values and the rules for them are not yet clear.
-		if brickToUpdate.Val > 3 {
+		if brickToUpdate.Val > w.MaxBrickValue {
 			brickToUpdate.Val = 1
 		}
 		brickToUpdate.State = Canonical
