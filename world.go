@@ -1,9 +1,10 @@
 package main
 
 import (
+	"cmp"
 	"fmt"
 	"math"
-	"sort"
+	"slices"
 )
 
 // World rules (physics)
@@ -181,6 +182,8 @@ type World struct {
 	SolvedFirstState      bool
 	AssertionFailed       bool
 	MaxBrickValue         int64
+	ObstaclesBuffer       []Rectangle
+	ColumnsBuffer         [][]*Brick
 }
 
 type PlayerInput struct {
@@ -202,8 +205,13 @@ func (w *World) Initialize() {
 	w.ComingUpDeceleration = 2
 	w.RegularCooldown = 20
 	w.RegularCooldownIdx = w.RegularCooldown
+	w.ObstaclesBuffer = make([]Rectangle, w.NCols*w.NRows+4)
+	w.ColumnsBuffer = make([][]*Brick, w.NCols)
+	for i := range w.ColumnsBuffer {
+		w.ColumnsBuffer[i] = make([]*Brick, w.NRows)
+	}
 
-	w.Bricks = []Brick{}
+	w.Bricks = make([]Brick, 0, w.NRows*w.NCols)
 	for y := int64(0); y < 4; y++ {
 		for x := int64(0); x < 6; x++ {
 			w.Bricks = append(w.Bricks, Brick{
@@ -451,7 +459,11 @@ func (w *World) UpdateCanonicalBricks() {
 	// that feels natural.
 	//
 	// Assign each brick to a column.
-	columns := make([][]*Brick, w.NCols)
+	columns := w.ColumnsBuffer
+	for i := range columns {
+		columns[i] = w.ColumnsBuffer[i][:0]
+	}
+
 	for i := range w.Bricks {
 		b := &w.Bricks[i]
 
@@ -469,8 +481,11 @@ func (w *World) UpdateCanonicalBricks() {
 	for _, column := range columns {
 		// Sort bricks in the column by their Y position, so that we can iterate
 		// through bricks from bottom to top.
-		sort.Slice(column, func(i, j int) bool {
-			return column[i].PixelPos.Y > column[j].PixelPos.Y
+		// sort.Slice(column, func(i, j int) bool {
+		// 	return column[i].PixelPos.Y > column[j].PixelPos.Y
+		// })
+		slices.SortFunc(column, func(b1, b2 *Brick) int {
+			return cmp.Compare(b1.PixelPos.Y, b2.PixelPos.Y)
 		})
 
 		lastTargetCanPos := Pt{-1000, -1000}
@@ -752,7 +767,7 @@ const (
 
 func (w *World) GetObstacles(exception *Brick,
 	o GetObstaclesOption) (obstacles []Rectangle) {
-	obstacles = make([]Rectangle, 0, len(w.Bricks))
+	obstacles = w.ObstaclesBuffer[:0]
 	for j := range w.Bricks {
 		if exception == &w.Bricks[j] {
 			continue
