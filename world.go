@@ -3,7 +3,6 @@ package main
 import (
 	"cmp"
 	"fmt"
-	"math"
 	"slices"
 )
 
@@ -265,6 +264,10 @@ func (w *World) Initialize() {
 	// 		})
 	// 	}
 	// }
+	// Pre-compute values for bricks.
+	for i := range w.Bricks {
+		UpdateDerivedValues(&w.Bricks[i], w)
+	}
 }
 
 func NewWorld() (w World) {
@@ -321,10 +324,6 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 
 	w.UpdateDraggedBrick(input)
 	w.UpdateFallingBricks()
-	// Pre-compute values for bricks.
-	for i := range w.Bricks {
-		UpdateDerivedValues(&w.Bricks[i], w)
-	}
 	w.UpdateCanonicalBricks()
 	w.MergeBricks()
 
@@ -392,11 +391,10 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 
 	// Get the set of rectangles the brick must not intersect.
 	obstacles := w.GetObstacles(dragged, IncludingTop)
-	brick := w.BrickBounds(dragged.PixelPos)
 
 	// If the dragged brick intersects something, it becomes canonical and the
 	// behavior of canonical bricks will resolve the intersection.
-	if RectIntersectsRects(brick, obstacles) {
+	if RectIntersectsRects(dragged.Bounds, obstacles) {
 		dragged.State = Canonical
 		return
 	}
@@ -716,6 +714,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 	}
 	for i := range w.Bricks {
 		w.Bricks[i].PixelPos.Y -= w.ComingUpSpeed
+		UpdateDerivedValues(&w.Bricks[i], w)
 	}
 	w.ComingUpDistanceLeft -= w.ComingUpSpeed
 	w.ComingUpSpeed -= w.ComingUpDeceleration
@@ -727,7 +726,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 			b := &w.Bricks[i]
 			bottom := playHeight - w.MarginPixelSize
 			top := bottom - w.BrickPixelSize*w.NRows - w.MarginPixelSize*(w.NRows-1)
-			brickTop := w.BrickBounds(w.Bricks[i].PixelPos).Corner1.Y
+			brickTop := w.Bricks[i].Bounds.Corner1.Y
 
 			if brickTop >= top {
 				// The brick is not over the top.
@@ -765,9 +764,22 @@ func (w *World) PixelSize() (sz Pt) {
 }
 
 func (w *World) PixelPosToCanonicalPos(pixelPos Pt) (canPos Pt) {
-	l := float64(w.BrickPixelSize + w.MarginPixelSize)
-	canPos.X = int64(math.Round(float64(pixelPos.X-w.MarginPixelSize) / l))
-	canPos.Y = int64(math.Round(float64(playHeight-pixelPos.Y)/l - 1))
+	l := w.BrickPixelSize + w.MarginPixelSize
+	difX := pixelPos.X - w.MarginPixelSize
+	canPos.X = difX / l
+	if difX%l > l/2 {
+		canPos.X++
+	}
+
+	difY := playHeight - pixelPos.Y
+	canPos.Y = difY/l - 1
+	if difY%l > l/2 {
+		canPos.Y++
+	}
+
+	// l := float64(w.BrickPixelSize + w.MarginPixelSize)
+	// canPos.X = int64(math.Round(float64(pixelPos.X-w.MarginPixelSize) / l))
+	// canPos.Y = int64(math.Round(float64(playHeight-pixelPos.Y)/l - 1))
 	return
 }
 
@@ -787,27 +799,6 @@ func (w *World) PixelPosToCanonicalPixelPos(pixelPos Pt) (canPixelPos Pt) {
 func (w *World) AtCanonicalPosition(b *Brick) bool {
 	canPixelPos := w.PixelPosToCanonicalPixelPos(b.PixelPos)
 	return canPixelPos == b.PixelPos
-}
-
-func (w *World) SpaceUnderBrickIsEmpty(b *Brick) bool {
-	canPos := w.PixelPosToCanonicalPos(b.PixelPos)
-	canPos.Y--
-	if canPos.Y < 0 {
-		// The brick is already at the bottom, it cannot fall any lower.
-		return false
-	}
-
-	// Get the rectangle below the brick.
-	canPixelPos := w.CanonicalPosToPixelPos(canPos)
-	r := w.BrickBounds(canPixelPos)
-
-	// Check if anything is in the rectangle.
-	obstacles := w.GetObstacles(b, IncludingTop)
-	if RectIntersectsRects(r, obstacles) {
-		// There's something in the space.
-		return false
-	}
-	return true
 }
 
 func (w *World) BrickBounds(posPixels Pt) (r Rectangle) {
@@ -836,7 +827,7 @@ func (w *World) GetObstacles(exception *Brick,
 		if exception.Val == w.Bricks[j].Val {
 			continue
 		}
-		obstacles = append(obstacles, w.BrickBounds(w.Bricks[j].PixelPos))
+		obstacles = append(obstacles, w.Bricks[j].Bounds)
 	}
 
 	bottom := playHeight - w.MarginPixelSize
@@ -867,27 +858,31 @@ const (
 	SlideOnObstacles
 )
 
+// MoveBrick should be the only function that changes the PixelPos of a brick.
+// If this convention is followed, it's easy to compute some values for bricks
+// only when their position changes, not every time we need them.
 func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64, moveType MoveType) (hitObstacle bool) {
 	if moveType == IgnoreObstacles {
 		// Go towards the target pos, without considering any obstacles.
 		pts := GetLinePoints(b.PixelPos, targetPos, nMaxPixels)
 		b.PixelPos = pts[len(pts)-1]
+		UpdateDerivedValues(b, w)
 		return false
 	}
 
 	if moveType == StopAtFirstObstacleIncludingTop {
-		r := w.BrickBounds(b.PixelPos)
 		obstacles := w.GetObstacles(b, IncludingTop)
-		newR, nPixelsLeft := MoveRect(r, targetPos, nMaxPixels, obstacles)
+		newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels, obstacles)
 		b.PixelPos = newR.Corner1
+		UpdateDerivedValues(b, w)
 		return nPixelsLeft > 0
 	}
 
 	if moveType == StopAtFirstObstacleExceptTop {
-		r := w.BrickBounds(b.PixelPos)
 		obstacles := w.GetObstacles(b, ExceptTop)
-		newR, nPixelsLeft := MoveRect(r, targetPos, nMaxPixels, obstacles)
+		newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels, obstacles)
 		b.PixelPos = newR.Corner1
+		UpdateDerivedValues(b, w)
 		return nPixelsLeft > 0
 	}
 
@@ -924,11 +919,11 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64, moveType Mov
 		// the brick travelling is more pleasant. It gives more of a feeling that it
 		// is an actual solid object in solid space on which forces are acting.
 
-		r := w.BrickBounds(b.PixelPos)
+		r := b.Bounds
 		obstacles := w.GetObstacles(b, IncludingTop)
 
 		// First, go as far as possible towards the target, in a straight line.
-		r, nMaxPixels = MoveRect(r, targetPos, nMaxPixels, obstacles)
+		r, nMaxPixels = MoveRect(b.Bounds, targetPos, nMaxPixels, obstacles)
 
 		// Now, go towards the target's X as much as possible.
 		r, nMaxPixels = MoveRect(r, Pt{targetPos.X, r.Corner1.Y},
@@ -939,7 +934,9 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64, moveType Mov
 			nMaxPixels, obstacles)
 
 		b.PixelPos = r.Corner1
+		UpdateDerivedValues(b, w)
+		return true
 	}
 
-	return true
+	panic("unhandled movement type")
 }
