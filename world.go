@@ -151,6 +151,16 @@ type Brick struct {
 	PixelPos     Pt
 	State        BrickState
 	FallingSpeed int64
+	// Derived values.
+	CanonicalPos      Pt
+	CanonicalPixelPos Pt
+	Bounds            Rectangle
+}
+
+func UpdateDerivedValues(b *Brick, w *World) {
+	b.Bounds = w.BrickBounds(b.PixelPos)
+	b.CanonicalPos = w.PixelPosToCanonicalPos(b.PixelPos)
+	b.CanonicalPixelPos = w.CanonicalPosToPixelPos(b.CanonicalPos)
 }
 
 type WorldState int64
@@ -184,6 +194,7 @@ type World struct {
 	MaxBrickValue         int64
 	ObstaclesBuffer       []Rectangle
 	ColumnsBuffer         [][]*Brick
+	CanPosBuffer          []Pt
 }
 
 type PlayerInput struct {
@@ -210,13 +221,14 @@ func (w *World) Initialize() {
 	for i := range w.ColumnsBuffer {
 		w.ColumnsBuffer[i] = make([]*Brick, w.NRows)
 	}
+	w.CanPosBuffer = make([]Pt, w.NCols*w.NRows)
 
 	w.Bricks = make([]Brick, 0, w.NRows*w.NCols)
 	for y := int64(0); y < 4; y++ {
 		for x := int64(0); x < 6; x++ {
 			w.Bricks = append(w.Bricks, Brick{
 				Val:      (x*y)%w.MaxBrickValue + 1,
-				PixelPos: w.CanonicalPosToPixelsPos(Pt{x, y}),
+				PixelPos: w.CanonicalPosToPixelPos(Pt{x, y}),
 				State:    Canonical,
 			})
 		}
@@ -225,22 +237,22 @@ func (w *World) Initialize() {
 	// w.Bricks = []Brick{}
 	// w.Bricks = append(w.Bricks, Brick{
 	// 	Val:      1,
-	// 	PixelPos: w.CanonicalPosToPixelsPos(Pt{0, 0}),
+	// 	PixelPos: w.CanonicalPosToPixelPos(Pt{0, 0}),
 	// 	State:    Canonical,
 	// })
 	// w.Bricks = append(w.Bricks, Brick{
 	// 	Val:      1,
-	// 	PixelPos: w.CanonicalPosToPixelsPos(Pt{1, 0}),
+	// 	PixelPos: w.CanonicalPosToPixelPos(Pt{1, 0}),
 	// 	State:    Canonical,
 	// })
 	// w.Bricks = append(w.Bricks, Brick{
 	// 	Val:      1,
-	// 	PixelPos: w.CanonicalPosToPixelsPos(Pt{2, 0}),
+	// 	PixelPos: w.CanonicalPosToPixelPos(Pt{2, 0}),
 	// 	State:    Canonical,
 	// })
 	// w.Bricks = append(w.Bricks, Brick{
 	// 	Val:      1,
-	// 	PixelPos: w.CanonicalPosToPixelsPos(Pt{0, 7}),
+	// 	PixelPos: w.CanonicalPosToPixelPos(Pt{0, 7}),
 	// 	State:    Canonical,
 	// })
 	// Test edge case with 3 bricks of the same value.
@@ -249,7 +261,7 @@ func (w *World) Initialize() {
 	// 		w.Bricks = append(w.Bricks, Brick{
 	// 			Val: 3,
 	// 			// PosMat:    Pt{x, y},
-	// 			PixelPos: w.CanonicalPosToPixelsPos(Pt{x, y}),
+	// 			PixelPos: w.CanonicalPosToPixelPos(Pt{x, y}),
 	// 		})
 	// 	}
 	// }
@@ -309,6 +321,10 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 
 	w.UpdateDraggedBrick(input)
 	w.UpdateFallingBricks()
+	// Pre-compute values for bricks.
+	for i := range w.Bricks {
+		UpdateDerivedValues(&w.Bricks[i], w)
+	}
 	w.UpdateCanonicalBricks()
 	w.MergeBricks()
 
@@ -411,8 +427,7 @@ func (w *World) UpdateFallingBricks() {
 	}
 }
 
-func (w *World) UpdateCanonicalBricks() {
-	// Mark falling bricks.
+func (w *World) MarkFallingBricks() {
 	for i := range w.Bricks {
 		b := &w.Bricks[i]
 
@@ -421,16 +436,62 @@ func (w *World) UpdateCanonicalBricks() {
 			continue
 		}
 
-		// Check if the brick is at canonical position and the space under the
-		// brick is completely empty. It is important to check if the brick
-		// is at the canonical position before going to falling. When the player
-		// releases a dragging brick, we want the released brick to move to a
-		// canonical position before starting to fall.
-		if w.AtCanonicalPosition(b) && w.SpaceUnderBrickIsEmpty(b) {
+		if b.PixelPos != b.CanonicalPixelPos {
+			// Skip bricks which are not at their canonical position.
+			continue
+		}
+
+		// Check if there's anything under this brick.
+		canPosUnder := b.CanonicalPos
+		canPosUnder.Y--
+		if canPosUnder.Y < 0 {
+			// The brick is already at the bottom, it cannot fall any lower.
+			continue
+		}
+
+		spaceUnderneath := w.BrickBounds(w.CanonicalPosToPixelPos(canPosUnder))
+
+		// Get bricks which have a shot at being near this brick:
+		// all bricks which have a squared distance 2 or less, in terms of
+		// canonical positions
+		intersects := false
+		for j := range w.Bricks {
+			otherB := &w.Bricks[j]
+			if canPosUnder.SquaredDistTo(otherB.CanonicalPos) <= 2 && i != j && b.Val != otherB.Val {
+				// possible intersection, check
+				if spaceUnderneath.Intersects(otherB.Bounds) {
+					intersects = true
+					break
+				}
+			}
+		}
+		if !intersects {
 			b.State = Falling
 			b.FallingSpeed = 0
 		}
 	}
+}
+
+func (w *World) UpdateCanonicalBricks() {
+	w.MarkFallingBricks()
+	// for i := range w.Bricks {
+	// 	b := &w.Bricks[i]
+	//
+	// 	// Skip non-canonical bricks.
+	// 	if b.State != Canonical {
+	// 		continue
+	// 	}
+	//
+	// 	// Check if the brick is at canonical position and the space under the
+	// 	// brick is completely empty. It is important to check if the brick
+	// 	// is at the canonical position before going to falling. When the player
+	// 	// releases a dragging brick, we want the released brick to move to a
+	// 	// canonical position before starting to fall.
+	// 	if w.AtCanonicalPosition(b) && w.SpaceUnderBrickIsEmpty(b) {
+	// 		b.State = Falling
+	// 		b.FallingSpeed = 0
+	// 	}
+	// }
 
 	// Decide the target position for each canonical brick:
 	// - Assign each brick to a column. Usually canonical bricks are firmly in
@@ -472,7 +533,7 @@ func (w *World) UpdateCanonicalBricks() {
 			continue
 		}
 
-		canPos := w.PixelsPosToCanonicalPos(b.PixelPos)
+		canPos := w.PixelPosToCanonicalPos(b.PixelPos)
 		// Possible assert: the column is valid.
 		columns[canPos.X] = append(columns[canPos.X], b)
 	}
@@ -492,7 +553,7 @@ func (w *World) UpdateCanonicalBricks() {
 		for i := range column {
 			b := column[i]
 			// Get target pos.
-			targetCanPos := w.PixelsPosToCanonicalPos(b.PixelPos)
+			targetCanPos := w.PixelPosToCanonicalPos(b.PixelPos)
 			// If it intersects with an already decided target pos, go to the
 			// next available canonical target pos. However, we are going from
 			// bottom to top so the only thing it can intersect with is the
@@ -515,7 +576,7 @@ func (w *World) UpdateCanonicalBricks() {
 				}
 			}
 			lastTargetCanPos = targetCanPos
-			targetPos := w.CanonicalPosToPixelsPos(targetCanPos)
+			targetPos := w.CanonicalPosToPixelPos(targetCanPos)
 
 			// Go towards the target pos, without considering any obstacles.
 			w.MoveBrick(b, targetPos, 21, IgnoreObstacles)
@@ -643,7 +704,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 		for x := range w.NCols {
 			w.Bricks = append(w.Bricks, Brick{
 				Val:      w.RInt(1, w.MaxBrickValue),
-				PixelPos: w.CanonicalPosToPixelsPos(Pt{x, -1}),
+				PixelPos: w.CanonicalPosToPixelPos(Pt{x, -1}),
 				State:    Canonical,
 			})
 		}
@@ -704,14 +765,14 @@ func (w *World) PixelSize() (sz Pt) {
 	return
 }
 
-func (w *World) PixelsPosToCanonicalPos(pixelPos Pt) (canPos Pt) {
+func (w *World) PixelPosToCanonicalPos(pixelPos Pt) (canPos Pt) {
 	l := float64(w.BrickPixelSize + w.MarginPixelSize)
 	canPos.X = int64(math.Round(float64(pixelPos.X-w.MarginPixelSize) / l))
 	canPos.Y = int64(math.Round(float64(playHeight-pixelPos.Y)/l - 1))
 	return
 }
 
-func (w *World) CanonicalPosToPixelsPos(canPos Pt) (pixelPos Pt) {
+func (w *World) CanonicalPosToPixelPos(canPos Pt) (pixelPos Pt) {
 	l := w.BrickPixelSize + w.MarginPixelSize
 	pixelPos.X = canPos.X*l + w.MarginPixelSize
 	pixelPos.Y = playHeight - (canPos.Y+1)*l
@@ -719,8 +780,8 @@ func (w *World) CanonicalPosToPixelsPos(canPos Pt) (pixelPos Pt) {
 }
 
 func (w *World) PixelPosToCanonicalPixelPos(pixelPos Pt) (canPixelPos Pt) {
-	canPos := w.PixelsPosToCanonicalPos(pixelPos)
-	canPixelPos = w.CanonicalPosToPixelsPos(canPos)
+	canPos := w.PixelPosToCanonicalPos(pixelPos)
+	canPixelPos = w.CanonicalPosToPixelPos(canPos)
 	return
 }
 
@@ -730,7 +791,7 @@ func (w *World) AtCanonicalPosition(b *Brick) bool {
 }
 
 func (w *World) SpaceUnderBrickIsEmpty(b *Brick) bool {
-	canPos := w.PixelsPosToCanonicalPos(b.PixelPos)
+	canPos := w.PixelPosToCanonicalPos(b.PixelPos)
 	canPos.Y--
 	if canPos.Y < 0 {
 		// The brick is already at the bottom, it cannot fall any lower.
@@ -738,7 +799,7 @@ func (w *World) SpaceUnderBrickIsEmpty(b *Brick) bool {
 	}
 
 	// Get the rectangle below the brick.
-	canPixelPos := w.CanonicalPosToPixelsPos(canPos)
+	canPixelPos := w.CanonicalPosToPixelPos(canPos)
 	r := w.BrickBounds(canPixelPos)
 
 	// Check if anything is in the rectangle.

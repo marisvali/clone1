@@ -86,7 +86,7 @@ func main() {
 	g.FrameSkipArrow = 1
 	g.slowdownFactor = 1
 	g.state = GameOngoing
-	g.state = Playback
+	// g.state = Playback
 
 	if g.state == Playback || g.state == DebugCrash {
 		g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))

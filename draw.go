@@ -59,7 +59,7 @@ func (g *Gui) DrawPlayRegion(screen *ebiten.Image) {
 	// Draw empty spaces.
 	for y := int64(0); y < g.world.NRows; y++ {
 		for x := int64(0); x < g.world.NCols; x++ {
-			pos := g.world.CanonicalPosToPixelsPos(Pt{x, y})
+			pos := g.world.CanonicalPosToPixelPos(Pt{x, y})
 			DrawSprite(screen, g.imgBlank, float64(pos.X), float64(pos.Y),
 				float64(g.world.BrickPixelSize),
 				float64(g.world.BrickPixelSize))
