@@ -31,6 +31,8 @@ func TestWorld_Regression1(t *testing.T) {
 // BenchmarkAveragePlaythrough-12    	      30	  36079253 ns/op
 // after refactoring the code for marking falling bricks
 // BenchmarkAveragePlaythrough-12    	      44	  25425711 ns/op
+// after precomputing derived values and using precomputations in UpdateCanonicalBricks
+// BenchmarkAveragePlaythrough-12    	      49	  23793808 ns/op
 func BenchmarkAveragePlaythrough(b *testing.B) {
 	playthrough := DeserializePlaythrough(ReadFile("average-playthrough.clone1"))
 	println(len(playthrough.History))

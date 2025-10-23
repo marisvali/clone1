@@ -533,9 +533,8 @@ func (w *World) UpdateCanonicalBricks() {
 			continue
 		}
 
-		canPos := w.PixelPosToCanonicalPos(b.PixelPos)
 		// Possible assert: the column is valid.
-		columns[canPos.X] = append(columns[canPos.X], b)
+		columns[b.CanonicalPos.X] = append(columns[b.CanonicalPos.X], b)
 	}
 
 	// Go column by column.
@@ -553,7 +552,7 @@ func (w *World) UpdateCanonicalBricks() {
 		for i := range column {
 			b := column[i]
 			// Get target pos.
-			targetCanPos := w.PixelPosToCanonicalPos(b.PixelPos)
+			targetCanPos := b.CanonicalPos
 			// If it intersects with an already decided target pos, go to the
 			// next available canonical target pos. However, we are going from
 			// bottom to top so the only thing it can intersect with is the
@@ -576,7 +575,7 @@ func (w *World) UpdateCanonicalBricks() {
 				}
 			}
 			lastTargetCanPos = targetCanPos
-			targetPos := w.CanonicalPosToPixelPos(targetCanPos)
+			targetPos := b.CanonicalPixelPos
 
 			// Go towards the target pos, without considering any obstacles.
 			w.MoveBrick(b, targetPos, 21, IgnoreObstacles)
