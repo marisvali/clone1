@@ -156,48 +156,11 @@ func GetLinePoints(start Pt, end Pt, nMaxPts int64) []Pt {
 	return linePointsBuffer[:n]
 }
 
-var mark = make([]bool, 1000)
-var minX = make([]int64, 1000)
-var maxX = make([]int64, 1000)
-var minY = make([]int64, 1000)
-var maxY = make([]int64, 1000)
-
 // RectIntersectsRects is a utility function that checks if a rectangle
 // intersects any of a list of rectangles.
 func RectIntersectsRects(r Rectangle, rects []Rectangle) bool {
-	for i := range rects {
-		mark[i] = true
-	}
-
-	minX1, maxX1 := MinMax(r.Corner1.X, r.Corner2.X)
-	minY1, maxY1 := MinMax(r.Corner1.Y, r.Corner2.Y)
-
-	for i := range rects {
-		minX[i], maxX[i] = MinMax(rects[i].Corner1.X, rects[i].Corner2.X)
-		minY[i], maxY[i] = MinMax(rects[i].Corner1.Y, rects[i].Corner2.Y)
-	}
-	for i := range rects {
-		if maxX1 <= minX[i] {
-			mark[i] = false
-		}
-	}
-	for i := range rects {
-		if minX1 >= maxX[i] {
-			mark[i] = false
-		}
-	}
-	for i := range rects {
-		if maxY1 <= minY[i] {
-			mark[i] = false
-		}
-	}
-	for i := range rects {
-		if minY1 >= maxY[i] {
-			mark[i] = false
-		}
-	}
-	for i := range rects {
-		if mark[i] {
+	for _, r2 := range rects {
+		if r.Intersects(r2) {
 			return true
 		}
 	}

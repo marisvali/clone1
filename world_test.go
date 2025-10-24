@@ -35,8 +35,6 @@ func TestWorld_Regression1(t *testing.T) {
 // BenchmarkAveragePlaythrough-12    	      49	  23793808 ns/op
 // after computing derived values only when bricks are moved and also use integer math for PixelPosToCanonicalPos instead of float math
 // BenchmarkAveragePlaythrough-12    	      49	  25785637 ns/op
-// after doing bulk calculations for RectIntersectsRects
-// BenchmarkAveragePlaythrough-12    	      42	  28127771 ns/op
 func BenchmarkAveragePlaythrough(b *testing.B) {
 	playthrough := DeserializePlaythrough(ReadFile("average-playthrough.clone1"))
 	println(len(playthrough.History))
