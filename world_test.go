@@ -35,6 +35,11 @@ func TestWorld_Regression1(t *testing.T) {
 // BenchmarkAveragePlaythrough-12    	      49	  23793808 ns/op
 // after computing derived values only when bricks are moved and also use integer math for PixelPosToCanonicalPos instead of float math
 // BenchmarkAveragePlaythrough-12    	      49	  25785637 ns/op
+// after making benchmark last 10s instead of 1s to get more accurate results:
+// BenchmarkAveragePlaythrough-12    	     500	  23831522 ns/op
+// after MoveBrick returns immediately if the position is the same, to avoid
+// unnecessary calls to UpdateDerivedValues in UpdateCanonicalBricks (guided by CPU profiler)
+// BenchmarkAveragePlaythrough-12    	     553	  21457118 ns/op
 func BenchmarkAveragePlaythrough(b *testing.B) {
 	playthrough := DeserializePlaythrough(ReadFile("average-playthrough.clone1"))
 	println(len(playthrough.History))

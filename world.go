@@ -862,6 +862,10 @@ const (
 // If this convention is followed, it's easy to compute some values for bricks
 // only when their position changes, not every time we need them.
 func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64, moveType MoveType) (hitObstacle bool) {
+	if b.PixelPos == targetPos {
+		return false
+	}
+
 	if moveType == IgnoreObstacles {
 		// Go towards the target pos, without considering any obstacles.
 		pts := GetLinePoints(b.PixelPos, targetPos, nMaxPixels)
