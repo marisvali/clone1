@@ -40,6 +40,8 @@ func TestWorld_Regression1(t *testing.T) {
 // after MoveBrick returns immediately if the position is the same, to avoid
 // unnecessary calls to UpdateDerivedValues in UpdateCanonicalBricks (guided by CPU profiler)
 // BenchmarkAveragePlaythrough-12    	     553	  21457118 ns/op
+// after GetObstacles only returns bricks that are close
+// BenchmarkAveragePlaythrough-12    	     846	  14178318 ns/op
 func BenchmarkAveragePlaythrough(b *testing.B) {
 	playthrough := DeserializePlaythrough(ReadFile("average-playthrough.clone1"))
 	println(len(playthrough.History))
