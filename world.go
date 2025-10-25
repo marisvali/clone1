@@ -427,7 +427,41 @@ func (w *World) UpdateFallingBricks() {
 	}
 }
 
+var occupied = make([]int64, 48)
+var pts = [4]Pt{}
+
 func (w *World) MarkFallingBricks() {
+	// Mark which canonical positions are touched by a brick in some way.
+	for i := range occupied {
+		occupied[i] = 0
+	}
+	for i := range w.Bricks {
+		b := &w.Bricks[i]
+		if b.CanonicalPos == b.CanonicalPixelPos {
+
+			idx := b.CanonicalPos.Y*w.NCols + b.CanonicalPos.X
+			occupied[idx] = b.Val
+		} else {
+			// If the brick is not exactly at its canonical position, it means it
+			// also occupies part of the neighboring positions.
+			// For each corner, compute the actual canonical region it is in.
+			c1 := b.Bounds.Corner1.Plus(Pt{1, 1})
+			c2 := b.Bounds.Corner2.Minus(Pt{1, 1})
+			pts[0] = c1
+			pts[1] = c2
+			pts[2] = Pt{c1.X, c2.Y}
+			pts[3] = Pt{c2.X, c1.Y}
+			for _, pt := range pts {
+				l := w.BrickPixelSize + w.MarginPixelSize
+				x := (pt.X - w.MarginPixelSize) / l
+				y := (playHeight - pt.Y) / l
+
+				idx := y*w.NCols + x
+				occupied[idx] = b.Val
+			}
+		}
+	}
+
 	for i := range w.Bricks {
 		b := &w.Bricks[i]
 
@@ -449,23 +483,8 @@ func (w *World) MarkFallingBricks() {
 			continue
 		}
 
-		spaceUnderneath := w.BrickBounds(w.CanonicalPosToPixelPos(canPosUnder))
-
-		// Get bricks which have a shot at being near this brick:
-		// all bricks which have a squared distance 2 or less, in terms of
-		// canonical positions
-		intersects := false
-		for j := range w.Bricks {
-			otherB := &w.Bricks[j]
-			if canPosUnder.SquaredDistTo(otherB.CanonicalPos) <= 2 && i != j && b.Val != otherB.Val {
-				// possible intersection, check
-				if spaceUnderneath.Intersects(otherB.Bounds) {
-					intersects = true
-					break
-				}
-			}
-		}
-		if !intersects {
+		idx := canPosUnder.Y*w.NCols + canPosUnder.X
+		if occupied[idx] == 0 || occupied[idx] == b.Val {
 			b.State = Falling
 			b.FallingSpeed = 0
 		}

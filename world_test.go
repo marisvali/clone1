@@ -42,6 +42,9 @@ func TestWorld_Regression1(t *testing.T) {
 // BenchmarkAveragePlaythrough-12    	     553	  21457118 ns/op
 // after GetObstacles only returns bricks that are close
 // BenchmarkAveragePlaythrough-12    	     939	  12716588 ns/op
+// after trying to optimize MarkFallingBricks by going through all bricks and
+// marking canonical positions which are touched
+// BenchmarkAveragePlaythrough-12    	     602	  19683517 ns/op
 func BenchmarkAveragePlaythrough(b *testing.B) {
 	playthrough := DeserializePlaythrough(ReadFile("average-playthrough.clone1"))
 	println(len(playthrough.History))
