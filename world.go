@@ -157,10 +157,24 @@ type Brick struct {
 }
 
 func ChangePixelPos(b *Brick, w *World, newPos Pt) {
+	// Remove b from MatBricks.
+	var idx int64
+	idx = b.CanonicalPos.Y*w.NCols + b.CanonicalPos.X + w.NCols
+	for i := range w.MatBricks[idx] {
+		if w.MatBricks[idx][i] == b {
+			// Remove from slice efficiently.
+			w.MatBricks[idx][i] = w.MatBricks[idx][len(w.MatBricks[idx])-1]
+			w.MatBricks[idx] = w.MatBricks[idx][:len(w.MatBricks[idx])-1]
+			break
+		}
+	}
+
 	b.PixelPos = newPos
 	b.Bounds = w.BrickBounds(b.PixelPos)
 	b.CanonicalPos = w.PixelPosToCanonicalPos(b.PixelPos)
 	b.CanonicalPixelPos = w.CanonicalPosToPixelPos(b.CanonicalPos)
+	idx = b.CanonicalPos.Y*w.NCols + b.CanonicalPos.X + w.NCols
+	w.MatBricks[idx] = append(w.MatBricks[idx], b)
 }
 
 type WorldState int64
@@ -195,6 +209,7 @@ type World struct {
 	ObstaclesBuffer       []Rectangle
 	ColumnsBuffer         [][]*Brick
 	CanPosBuffer          []Pt
+	MatBricks             [][]*Brick
 }
 
 type PlayerInput struct {
@@ -222,6 +237,7 @@ func (w *World) Initialize() {
 		w.ColumnsBuffer[i] = make([]*Brick, w.NRows)
 	}
 	w.CanPosBuffer = make([]Pt, w.NCols*w.NRows)
+	w.MatBricks = make([][]*Brick, w.NCols*w.NRows+w.NCols+w.NCols)
 
 	w.Bricks = make([]Brick, 0, w.NRows*w.NCols)
 	for y := int64(0); y < 4; y++ {
@@ -646,6 +662,20 @@ func (w *World) MergeBricks() {
 		}
 		brickToUpdate.State = Canonical
 
+		// Remove from MatBricks
+		// Remove b from MatBricks.
+		var idx int64
+		b := &w.Bricks[idxToRemove]
+		idx = b.CanonicalPos.Y*w.NCols + b.CanonicalPos.X + w.NCols
+		for i := range w.MatBricks[idx] {
+			if w.MatBricks[idx][i] == b {
+				// Remove from slice efficiently.
+				w.MatBricks[idx][i] = w.MatBricks[idx][len(w.MatBricks[idx])-1]
+				w.MatBricks[idx] = w.MatBricks[idx][:len(w.MatBricks[idx])-1]
+				break
+			}
+		}
+
 		// Remove from slice efficiently.
 		w.Bricks[idxToRemove] = w.Bricks[len(w.Bricks)-1]
 		w.Bricks = w.Bricks[:len(w.Bricks)-1]
@@ -818,6 +848,26 @@ const (
 func (w *World) GetObstacles(exception *Brick,
 	o GetObstaclesOption) (obstacles []Rectangle) {
 	obstacles = w.ObstaclesBuffer[:0]
+
+	obstacles2 := []Rectangle{}
+	pos := exception.CanonicalPos
+	for y := pos.Y - 1; y <= pos.Y+1; y++ {
+		for x := pos.X - 1; x <= pos.X+1; x++ {
+			if x < 0 || x >= w.NCols || y < -1 || y >= w.NRows {
+				continue
+			}
+			idx := y*w.NCols + x + w.NCols
+			bricksAtCanPos := w.MatBricks[idx]
+			for _, b := range bricksAtCanPos {
+				// Skip bricks that have the same value.
+				if exception.Val == b.Val {
+					continue
+				}
+				obstacles2 = append(obstacles2, b.Bounds)
+			}
+		}
+	}
+
 	for j := range w.Bricks {
 		otherB := &w.Bricks[j]
 		if exception == otherB {
