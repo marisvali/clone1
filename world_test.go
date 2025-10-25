@@ -42,8 +42,6 @@ func TestWorld_Regression1(t *testing.T) {
 // BenchmarkAveragePlaythrough-12    	     553	  21457118 ns/op
 // after GetObstacles only returns bricks that are close
 // BenchmarkAveragePlaythrough-12    	     846	  14178318 ns/op
-// after using MatBricks to store list of bricks which are at a canonical position
-// BenchmarkAveragePlaythrough-12    	     810	  14872872 ns/op
 func BenchmarkAveragePlaythrough(b *testing.B) {
 	playthrough := DeserializePlaythrough(ReadFile("average-playthrough.clone1"))
 	println(len(playthrough.History))
