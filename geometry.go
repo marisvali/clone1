@@ -170,6 +170,15 @@ func RectIntersectsRects(r Rectangle, rects []Rectangle) bool {
 	return false
 }
 
+// moveRectBufferSize is an arbitrary limit for MoveRect. Change its
+// value to accommodate your needs. The only concern is to have something that
+// doesn't eat up RAM unnecessarily but is good enough for everything the game
+// needs.
+const moveRectBufferSize = 100
+
+// moveRectBuffer is a buffer allocated only once and reused by MoveRect.
+var moveRectBuffer = make([]Rectangle, moveRectBufferSize)
+
 // MoveRect computes a rectangle newR the size of r as if r was moved in a
 // straight line towards targetPos until:
 // - it reached targetPos or
@@ -185,9 +194,35 @@ func MoveRect(r Rectangle, targetPos Pt, nMaxPixels int64,
 	// current position, which we do not consider a movement.
 	pts := GetLinePoints(r.Corner1, targetPos, nMaxPixels+1)
 
+	// Filter out obstacles that cannot be relevant:
+	// - compute a large rectangle that is the minimum rectangle that includes
+	// both the start and end rectangle
+	// - any obstacle that does not intersect this large rectangle cannot
+	// intersect r during its movement
+	// This optimization is really only relevant if there's more than 2 points
+	// in pts, otherwise we might as well let RectIntersectsRects execute once
+	// for all obstacles.
+	rSize := Pt{r.Width(), r.Height()}
+	if len(pts) > 2 {
+		endRect := Rectangle{pts[len(pts)-1], pts[len(pts)-1].Plus(rSize)}
+		var largeRect Rectangle
+		largeRect.Corner1.X = Min(Min(r.Corner1.X, r.Corner2.X), Min(endRect.Corner1.X, endRect.Corner2.X))
+		largeRect.Corner1.Y = Min(Min(r.Corner1.Y, r.Corner2.Y), Min(endRect.Corner1.Y, endRect.Corner2.Y))
+		largeRect.Corner2.X = Max(Max(r.Corner1.X, r.Corner2.X), Max(endRect.Corner1.X, endRect.Corner2.X))
+		largeRect.Corner2.Y = Max(Max(r.Corner1.Y, r.Corner2.Y), Max(endRect.Corner1.Y, endRect.Corner2.Y))
+
+		n := 0
+		for i := range obstacles {
+			if largeRect.Intersects(obstacles[i]) {
+				moveRectBuffer[n] = obstacles[i]
+				n++
+			}
+		}
+		obstacles = moveRectBuffer[:n]
+	}
+
 	// Move the rectangle pixel by pixel and check if it collides with any of
 	// the obstacles.
-	rSize := Pt{r.Width(), r.Height()}
 	var i int64
 	for i = 1; i < int64(len(pts)); i++ {
 		r = Rectangle{pts[i], pts[i].Plus(rSize)}

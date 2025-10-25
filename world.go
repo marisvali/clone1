@@ -793,12 +793,6 @@ func (w *World) GetObstacles(exception *Brick,
 			continue
 		}
 
-		// Skip bricks that are too far away
-		// TODO: !!!! warning this assumes that GetObstacles is only used for moves which are shorter than half the length of a brick
-		// what do we do about exception being null? -> that isn't a concern anymore
-		if exception.CanonicalPos.SquaredDistTo(otherB.CanonicalPos) > 2 {
-			continue
-		}
 		obstacles = append(obstacles, w.Bricks[j].Bounds)
 	}
 
