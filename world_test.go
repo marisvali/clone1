@@ -54,7 +54,7 @@ func TestWorld_Regression1(t *testing.T) {
 // BenchmarkAveragePlaythrough-12    	    1341	   8560720 ns/op
 // after implementing a more rigorous filter for obstacles (with laptop plugged
 // in, remember to unplug after battery recharges an rerun this measurement)
-// BenchmarkAveragePlaythrough-12    	    1588	   7590273 ns/op
+// BenchmarkAveragePlaythrough-12    	    1514	   7647922 ns/op
 func BenchmarkAveragePlaythrough(b *testing.B) {
 	playthrough := DeserializePlaythrough(ReadFile("average-playthrough.clone1"))
 	println(len(playthrough.History))
