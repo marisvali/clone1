@@ -46,6 +46,9 @@ func TestWorld_Regression1(t *testing.T) {
 // BenchmarkAveragePlaythrough-12    	     915	  13114277 ns/op
 // after optimizing FindMergingBricks
 // BenchmarkAveragePlaythrough-12    	    1141	  10529063 ns/op
+// after assuming that rectangles are initialized properly and corner1 is always
+// upper left and corner2 is always lower right
+// BenchmarkAveragePlaythrough-12    	    1362	   8770731 ns/op
 func BenchmarkAveragePlaythrough(b *testing.B) {
 	playthrough := DeserializePlaythrough(ReadFile("average-playthrough.clone1"))
 	println(len(playthrough.History))

@@ -836,7 +836,7 @@ func (w *World) GetObstacles(exception *Brick,
 	right := playWidth - w.MarginPixelSize
 
 	bottomRect := Rectangle{Pt{left, bottom}, Pt{right, bottom + 100}}
-	topRect := Rectangle{Pt{left, top}, Pt{right, top - 100}}
+	topRect := Rectangle{Pt{left, top - 100}, Pt{right, top}}
 	leftRect := Rectangle{Pt{left - 100, top}, Pt{left, bottom}}
 	rightRect := Rectangle{Pt{right, top}, Pt{right + 100, bottom}}
 

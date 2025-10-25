@@ -77,11 +77,14 @@ func (r *Rectangle) ContainsPt(pt Pt) bool {
 }
 
 func (r *Rectangle) Intersects(other Rectangle) bool {
-	minX1, maxX1 := MinMax(r.Corner1.X, r.Corner2.X)
-	minY1, maxY1 := MinMax(r.Corner1.Y, r.Corner2.Y)
-	minX2, maxX2 := MinMax(other.Corner1.X, other.Corner2.X)
-	minY2, maxY2 := MinMax(other.Corner1.Y, other.Corner2.Y)
-	return minX1 < maxX2 && maxX1 > minX2 && minY1 < maxY2 && maxY1 > minY2
+	// Warning! This assumes that Corner1 is always top-left and Corner2 is
+	// bottom-right. It's worth organizing the code such that this is always
+	// the case, because it makes testing for intersections significantly faster
+	// and testing for intersections is a big part of the logic in this project.
+	return r.Corner1.X < other.Corner2.X &&
+		r.Corner2.X > other.Corner1.X &&
+		r.Corner1.Y < other.Corner2.Y &&
+		r.Corner2.Y > other.Corner1.Y
 }
 
 // linePointsBufferSize is an arbitrary limit for GetLinePoints. Change its
