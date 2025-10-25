@@ -456,35 +456,7 @@ func (w *World) MarkFallingBricks() {
 		intersects := false
 		for j := range w.Bricks {
 			otherB := &w.Bricks[j]
-			// For a brick to intersect slotUnderneath it must have a canonical
-			// position equal to canPosUnder or be near it. "Near" means that
-			// its X is either -1 or +1 from canPosUnder.X. If the difference in
-			// X is any larger, the brick cannot intersect slotUnderneath.
-			// The same is true for Y, if the difference is any larger than 1,
-			// the brick cannot intersect slotUnderneath. (I will not write the
-			// entire demonstration here, check and see that this is true.)
-			// So only canPosUnder and the 8 positions around it are worth
-			// considering.
-			// The distance between canPosUnder and the 9 positions can be
-			// (0, 0), (1, 0), (0, 1) or (1, 1). The square lengths of these
-			// vectors are 0, 1 or 2. The nearest brick is at distance (2, 0) or
-			// (0, 2) which as square length is 4. So a quick way to check if a
-			// canonical position is one of the 9 is to check if the square
-			// length of the vector between canPosUnder and the other position
-			// is less or equal to 2.
-			// This small condition has a noticeable impact in the benchmark,
-			// the execution is around 20% faster with it than without it.
-			// I wrote the above explanation in detail because I thought up this
-			// condition while trying out possible optimizations. Then when I
-			// wanted to refactor the code, I wanted to remove it because I
-			// thought it was a messy heuristic that only passed tests on
-			// accident, and I had to see the impact on the benchmark to rethink
-			// it and re-realize that it is in fact mathematically sound. So I
-			// am keeping the optimization as it is a very small piece of code,
-			// though I am still not sure it is worth the wall of text that must
-			// come with it.
-			nearEnough := canPosUnder.SquaredDistTo(otherB.CanonicalPos) <= 2
-			if nearEnough && i != j && b.Val != otherB.Val {
+			if i != j && b.Val != otherB.Val {
 				// possible intersection, check
 				if slotUnderneath.Intersects(otherB.Bounds) {
 					intersects = true
