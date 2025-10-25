@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"fmt"
+	"math"
 	"slices"
 )
 
@@ -474,24 +475,6 @@ func (w *World) MarkFallingBricks() {
 
 func (w *World) UpdateCanonicalBricks() {
 	w.MarkFallingBricks()
-	// for i := range w.Bricks {
-	// 	b := &w.Bricks[i]
-	//
-	// 	// Skip non-canonical bricks.
-	// 	if b.State != Canonical {
-	// 		continue
-	// 	}
-	//
-	// 	// Check if the brick is at canonical position and the space under the
-	// 	// brick is completely empty. It is important to check if the brick
-	// 	// is at the canonical position before going to falling. When the player
-	// 	// releases a dragging brick, we want the released brick to move to a
-	// 	// canonical position before starting to fall.
-	// 	if w.AtCanonicalPosition(b) && w.SpaceUnderBrickIsEmpty(b) {
-	// 		b.State = Falling
-	// 		b.FallingSpeed = 0
-	// 	}
-	// }
 
 	// Decide the target position for each canonical brick:
 	// - Assign each brick to a column. Usually canonical bricks are firmly in
@@ -763,22 +746,9 @@ func (w *World) PixelSize() (sz Pt) {
 }
 
 func (w *World) PixelPosToCanonicalPos(pixelPos Pt) (canPos Pt) {
-	l := w.BrickPixelSize + w.MarginPixelSize
-	difX := pixelPos.X - w.MarginPixelSize
-	canPos.X = difX / l
-	if difX%l > l/2 {
-		canPos.X++
-	}
-
-	difY := playHeight - pixelPos.Y
-	canPos.Y = difY/l - 1
-	if difY%l > l/2 {
-		canPos.Y++
-	}
-
-	// l := float64(w.BrickPixelSize + w.MarginPixelSize)
-	// canPos.X = int64(math.Round(float64(pixelPos.X-w.MarginPixelSize) / l))
-	// canPos.Y = int64(math.Round(float64(playHeight-pixelPos.Y)/l - 1))
+	l := float64(w.BrickPixelSize + w.MarginPixelSize)
+	canPos.X = int64(math.Round(float64(pixelPos.X-w.MarginPixelSize) / l))
+	canPos.Y = int64(math.Round(float64(playHeight-pixelPos.Y)/l - 1))
 	return
 }
 
