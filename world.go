@@ -147,17 +147,28 @@ const (
 )
 
 type Brick struct {
-	Val          int64
+	Val int64
+	// This should only be set by SetPixelPos.
 	PixelPos     Pt
 	State        BrickState
 	FallingSpeed int64
-	// Derived values.
+	// Derived values. These should only ever be read. They are re-computed
+	// every time PixelPos changes.
 	CanonicalPos      Pt
 	CanonicalPixelPos Pt
 	Bounds            Rectangle
 }
 
-func ChangePixelPos(b *Brick, w *World, newPos Pt) {
+func NewCanonicalBrick(canPos Pt, val int64, w *World) Brick {
+	b := Brick{
+		Val:   val,
+		State: Canonical,
+	}
+	b.SetPixelPos(w.CanonicalPosToPixelPos(canPos), w)
+	return b
+}
+
+func (b *Brick) SetPixelPos(newPos Pt, w *World) {
 	b.PixelPos = newPos
 	b.Bounds = w.BrickBounds(b.PixelPos)
 	b.CanonicalPos = w.PixelPosToCanonicalPos(b.PixelPos)
@@ -227,7 +238,8 @@ func (w *World) Initialize() {
 	w.Bricks = make([]Brick, 0, w.NRows*w.NCols)
 	for y := int64(0); y < 4; y++ {
 		for x := int64(0); x < 6; x++ {
-			w.AddBrick(Pt{x, y}, (x*y)%w.MaxBrickValue+1)
+			val := (x*y)%w.MaxBrickValue + 1
+			w.Bricks = append(w.Bricks, NewCanonicalBrick(Pt{x, y}, val, w))
 		}
 	}
 	// Test edge case with 4 bricks of the same value.
@@ -262,15 +274,6 @@ func (w *World) Initialize() {
 	// 		})
 	// 	}
 	// }
-}
-
-func (w *World) AddBrick(canPos Pt, val int64) {
-	w.Bricks = append(w.Bricks, Brick{
-		Val:   val,
-		State: Canonical,
-	})
-
-	ChangePixelPos(&w.Bricks[len(w.Bricks)-1], w, w.CanonicalPosToPixelPos(canPos))
 }
 
 func NewWorld() (w World) {
@@ -679,7 +682,8 @@ func (w *World) StepComingUp(justEnteredState bool) {
 
 		// Create a new row of bricks.
 		for x := range w.NCols {
-			w.AddBrick(Pt{x, -1}, w.RInt(1, w.MaxBrickValue))
+			val := w.RInt(1, w.MaxBrickValue)
+			w.Bricks = append(w.Bricks, NewCanonicalBrick(Pt{x, -1}, val, w))
 		}
 	}
 
@@ -691,7 +695,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 	for i := range w.Bricks {
 		newPos := w.Bricks[i].PixelPos
 		newPos.Y -= w.ComingUpSpeed
-		ChangePixelPos(&w.Bricks[i], w, newPos)
+		w.Bricks[i].SetPixelPos(newPos, w)
 	}
 	w.ComingUpDistanceLeft -= w.ComingUpSpeed
 	w.ComingUpSpeed -= w.ComingUpDeceleration
@@ -835,14 +839,14 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64, moveType Mov
 	if moveType == IgnoreObstacles {
 		// Go towards the target pos, without considering any obstacles.
 		pts := GetLinePoints(b.PixelPos, targetPos, nMaxPixels)
-		ChangePixelPos(b, w, pts[len(pts)-1])
+		b.SetPixelPos(pts[len(pts)-1], w)
 		return false
 	}
 
 	if moveType == StopAtFirstObstacleIncludingTop {
 		obstacles := w.GetObstacles(b, IncludingTop)
 		newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels, obstacles)
-		ChangePixelPos(b, w, newR.Corner1)
+		b.SetPixelPos(newR.Corner1, w)
 		return nPixelsLeft > 0
 	}
 
@@ -850,7 +854,7 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64, moveType Mov
 		obstacles := w.GetObstacles(b, ExceptTop)
 		newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels, obstacles)
 		b.PixelPos = newR.Corner1
-		ChangePixelPos(b, w, newR.Corner1)
+		b.SetPixelPos(newR.Corner1, w)
 		return nPixelsLeft > 0
 	}
 
@@ -901,7 +905,7 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64, moveType Mov
 		r, nMaxPixels = MoveRect(r, Pt{r.Corner1.X, targetPos.Y},
 			nMaxPixels, obstacles)
 
-		ChangePixelPos(b, w, r.Corner1)
+		b.SetPixelPos(r.Corner1, w)
 		return true
 	}
 
