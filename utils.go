@@ -258,3 +258,8 @@ func ZipToFile(filename string, data []byte) {
 func Sqr(x int64) int64 {
 	return x * x
 }
+
+func Remove[T any](s []T, i int) []T {
+	s[i] = s[len(s)-1]
+	return s[:len(s)-1]
+}

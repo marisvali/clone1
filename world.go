@@ -186,27 +186,29 @@ const (
 
 type World struct {
 	Rand
-	NCols                 int64
-	NRows                 int64
-	BrickPixelSize        int64
-	MarginPixelSize       int64
-	BrickFallAcceleration int64
-	Bricks                []Brick
-	DraggingOffset        Pt
-	DebugPts              []Pt
-	RegularCooldown       int64
-	RegularCooldownIdx    int64
-	ComingUpDistanceLeft  int64
-	ComingUpSpeed         int64
-	ComingUpDeceleration  int64
-	State                 WorldState
-	PreviousState         WorldState
-	SolvedFirstState      bool
-	AssertionFailed       bool
-	MaxBrickValue         int64
-	ObstaclesBuffer       []Rectangle
-	ColumnsBuffer         [][]*Brick
-	CanPosBuffer          []Pt
+	NCols                    int64
+	NRows                    int64
+	BrickPixelSize           int64
+	MarginPixelSize          int64
+	DragSpeed                int64
+	CanonicalAdjustmentSpeed int64
+	BrickFallAcceleration    int64
+	Bricks                   []Brick
+	DraggingOffset           Pt
+	DebugPts                 []Pt
+	RegularCooldown          int64
+	RegularCooldownIdx       int64
+	ComingUpDistanceLeft     int64
+	ComingUpSpeed            int64
+	ComingUpDeceleration     int64
+	State                    WorldState
+	PreviousState            WorldState
+	SolvedFirstState         bool
+	AssertionFailed          bool
+	MaxBrickValue            int64
+	ObstaclesBuffer          []Rectangle
+	ColumnsBuffer            [][]*Brick
+	CanPosBuffer             []Pt
 }
 
 type PlayerInput struct {
@@ -224,6 +226,8 @@ func (w *World) Initialize() {
 	w.MaxBrickValue = 10
 	w.MarginPixelSize = 30
 	w.BrickPixelSize = (playWidth - (w.MarginPixelSize * (w.NCols + 1))) / w.NCols
+	w.DragSpeed = 100
+	w.CanonicalAdjustmentSpeed = 21
 	w.BrickFallAcceleration = 2
 	w.ComingUpDeceleration = 2
 	w.RegularCooldown = 20
@@ -406,8 +410,7 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 	}
 
 	targetPos := input.Pos.Plus(w.DraggingOffset)
-	nMaxPixels := int64(100)
-	w.MoveBrick(dragged, targetPos, nMaxPixels, SlideOnObstacles)
+	w.MoveBrick(dragged, targetPos, w.DragSpeed, SlideOnObstacles)
 }
 
 func (w *World) UpdateFallingBricks() {
@@ -431,6 +434,8 @@ func (w *World) UpdateFallingBricks() {
 	}
 }
 
+// MarkFallingBricks checks if any canonical brick should start falling and
+// changes its state.
 func (w *World) MarkFallingBricks() {
 	for i := range w.Bricks {
 		b := &w.Bricks[i]
@@ -453,18 +458,16 @@ func (w *World) MarkFallingBricks() {
 			continue
 		}
 
-		slotUnderneath := w.BrickBounds(w.CanonicalPosToPixelPos(canPosUnder))
+		// Get the slot underneath the brick.
+		slot := w.BrickBounds(w.CanonicalPosToPixelPos(canPosUnder))
 
-		// Check if any bricks intersect slotUnderneath.
+		// Check if any bricks intersect the slot.
 		intersects := false
 		for j := range w.Bricks {
-			otherB := &w.Bricks[j]
-			if i != j && b.Val != otherB.Val {
-				// possible intersection, check
-				if slotUnderneath.Intersects(otherB.Bounds) {
-					intersects = true
-					break
-				}
+			if i != j && b.Val != w.Bricks[j].Val &&
+				w.Bricks[j].Bounds.Intersects(slot) {
+				intersects = true
+				break
 			}
 		}
 		if !intersects {
@@ -562,7 +565,8 @@ func (w *World) UpdateCanonicalBricks() {
 			targetPos := b.CanonicalPixelPos
 
 			// Go towards the target pos, without considering any obstacles.
-			w.MoveBrick(b, targetPos, 21, IgnoreObstacles)
+			w.MoveBrick(b, targetPos, w.CanonicalAdjustmentSpeed,
+				IgnoreObstacles)
 		}
 	}
 }
@@ -629,10 +633,7 @@ func (w *World) MergeBricks() {
 			brickToUpdate.Val = 1
 		}
 		brickToUpdate.State = Canonical
-
-		// Remove from slice efficiently.
-		w.Bricks[idxToRemove] = w.Bricks[len(w.Bricks)-1]
-		w.Bricks = w.Bricks[:len(w.Bricks)-1]
+		w.Bricks = Remove(w.Bricks, idxToRemove)
 	}
 }
 
@@ -764,11 +765,6 @@ func (w *World) PixelPosToCanonicalPixelPos(pixelPos Pt) (canPixelPos Pt) {
 	return
 }
 
-func (w *World) AtCanonicalPosition(b *Brick) bool {
-	canPixelPos := w.PixelPosToCanonicalPixelPos(b.PixelPos)
-	return canPixelPos == b.PixelPos
-}
-
 func (w *World) BrickBounds(posPixels Pt) (r Rectangle) {
 	r.Corner1 = posPixels
 	r.Corner2 = posPixels
@@ -784,16 +780,18 @@ const (
 	ExceptTop
 )
 
-func (w *World) GetObstacles(exception *Brick,
+// GetObstacles returns all the obstacles for a certain brick, as rectangles.
+// This includes walls and other bricks that have different values than b.
+func (w *World) GetObstacles(b *Brick,
 	o GetObstaclesOption) (obstacles []Rectangle) {
 	obstacles = w.ObstaclesBuffer[:0]
 	for j := range w.Bricks {
 		otherB := &w.Bricks[j]
-		if exception == otherB {
+		if b == otherB {
 			continue
 		}
 		// Skip bricks that have the same value.
-		if exception.Val == otherB.Val {
+		if b.Val == otherB.Val {
 			continue
 		}
 
@@ -828,10 +826,9 @@ const (
 	SlideOnObstacles
 )
 
-// MoveBrick should be the only function that changes the PixelPos of a brick.
-// If this convention is followed, it's easy to compute some values for bricks
-// only when their position changes, not every time we need them.
-func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64, moveType MoveType) (hitObstacle bool) {
+// MoveBrick should be the only function that changes the position of a brick.
+func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
+	moveType MoveType) (hitObstacle bool) {
 	if b.PixelPos == targetPos {
 		return false
 	}
@@ -845,15 +842,16 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64, moveType Mov
 
 	if moveType == StopAtFirstObstacleIncludingTop {
 		obstacles := w.GetObstacles(b, IncludingTop)
-		newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels, obstacles)
+		newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels,
+			obstacles)
 		b.SetPixelPos(newR.Corner1, w)
 		return nPixelsLeft > 0
 	}
 
 	if moveType == StopAtFirstObstacleExceptTop {
 		obstacles := w.GetObstacles(b, ExceptTop)
-		newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels, obstacles)
-		b.PixelPos = newR.Corner1
+		newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels,
+			obstacles)
 		b.SetPixelPos(newR.Corner1, w)
 		return nPixelsLeft > 0
 	}
@@ -870,27 +868,28 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64, moveType Mov
 		// I can think of two ways to implement this logic:
 		// 1. Find the right equations to solve in order to compute the target
 		// position for the brick. (analytical solution)
-		// 2. Move the brick in small steps and check if it collides with anything
-		// after each move. (iterative solution)
+		// 2. Move the brick in small steps and check if it collides with
+		// anything after each move. (iterative solution)
 		//
 		// I will go for the iterative solution for now, because it's more
-		// straightforward for me to come up with it. I'm simulating a process that
-		// I imagine in an iterative way (the brick "moves towards the target").
+		// straightforward for me to come up with it. I'm simulating a process
+		// that I imagine in an iterative way (the brick "moves towards the
+		// target").
 		//
-		// For the iterative solution, you can do it with floats or integers. I will
-		// do it with integers and move the brick pixel by pixel. I do this because
-		// I don't want to use floats in the world logic and I may be able to
-		// afford the computational cost.
+		// For the iterative solution, you can do it with floats or integers.
+		// I will do it with integers and move the brick pixel by pixel. I do
+		// this because I don't want to use floats in the world logic and I may
+		// be able to afford the computational cost.
 		//
-		// Only travel a limited number of pixels, to have the effect of a brick's
-		// "travel speed". The travel speed is not that noticeable when moving the
-		// brick around in empty space. But if the brick was previously blocked by
-		// something on its right and the user lifts it up to the point where now it
-		// can go a long way through empty space to reach the mouse position, it
-		// is very visible if the brick "travels" or "teleports" and the effect of
-		// the brick travelling is more pleasant. It gives more of a feeling that it
-		// is an actual solid object in solid space on which forces are acting.
-
+		// Only travel a limited number of pixels, to have the effect of a
+		// brick's "travel speed". The travel speed is not that noticeable when
+		// moving the brick around in empty space. But if the brick was
+		// previously blocked by something on its right and the user lifts it up
+		// to the point where now it can go a long way through empty space to
+		// reach the mouse position, it is very visible if the brick "travels"
+		// or "teleports" and the effect of the brick travelling is more
+		// pleasant. It gives more of a feeling that it is an actual solid
+		// object in solid space on which forces are acting.
 		r := b.Bounds
 		obstacles := w.GetObstacles(b, IncludingTop)
 
@@ -898,12 +897,12 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64, moveType Mov
 		r, nMaxPixels = MoveRect(b.Bounds, targetPos, nMaxPixels, obstacles)
 
 		// Now, go towards the target's X as much as possible.
-		r, nMaxPixels = MoveRect(r, Pt{targetPos.X, r.Corner1.Y},
-			nMaxPixels, obstacles)
+		r, nMaxPixels = MoveRect(r, Pt{targetPos.X, r.Corner1.Y}, nMaxPixels,
+			obstacles)
 
 		// Now, go towards the target's Y as much as possible.
-		r, nMaxPixels = MoveRect(r, Pt{r.Corner1.X, targetPos.Y},
-			nMaxPixels, obstacles)
+		r, nMaxPixels = MoveRect(r, Pt{r.Corner1.X, targetPos.Y}, nMaxPixels,
+			obstacles)
 
 		b.SetPixelPos(r.Corner1, w)
 		return true
