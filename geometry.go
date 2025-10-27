@@ -22,14 +22,6 @@ type Rectangle struct {
 	Corner2 Pt
 }
 
-func Abs(x int64) int64 {
-	if x < 0 {
-		return -x
-	} else {
-		return x
-	}
-}
-
 func Min(x int64, y int64) int64 {
 	if x < y {
 		return x
@@ -54,6 +46,24 @@ func MinMax(x int64, y int64) (int64, int64) {
 	}
 }
 
+func NewRectangle(x1, y1, x2, y2 int64) (r Rectangle) {
+	r.Corner1.X, r.Corner2.X = MinMax(x1, x2)
+	r.Corner1.Y, r.Corner2.Y = MinMax(y1, y2)
+	if r.Width() == 0 || r.Height() == 0 {
+		panic(fmt.Errorf("invalid rectangle (zero width or height) - "+
+			"x1: %d y1: %d x2: %d y2: %d", x1, y1, x2, y2))
+	}
+	return
+}
+
+func Abs(x int64) int64 {
+	if x < 0 {
+		return -x
+	} else {
+		return x
+	}
+}
+
 func (r *Rectangle) Width() int64 {
 	return Abs(r.Corner1.X - r.Corner2.X)
 }
@@ -62,20 +72,36 @@ func (r *Rectangle) Height() int64 {
 	return Abs(r.Corner1.Y - r.Corner2.Y)
 }
 
-func (r *Rectangle) Min() Pt {
-	return Pt{Min(r.Corner1.X, r.Corner2.X), Min(r.Corner1.Y, r.Corner2.Y)}
-}
-
-func (r *Rectangle) Max() Pt {
-	return Pt{Max(r.Corner1.X, r.Corner2.X), Max(r.Corner1.Y, r.Corner2.Y)}
-}
-
+// ContainsPt returns true if pt is inside r and false otherwise.
+// For the sake of edge cases, the point is not inside the rectangle if it falls
+// on the right or bottom edges. The reason for this is that it makes it easier
+// to work with a grid, for example. (0, 0, 100, 100) can be split into a 10x10
+// like this:
+// (0, 0, 10, 10)  (10, 0, 20, 10)  (20, 0, 30, 10) ...
+// (0, 10, 10, 20) (10, 10, 20, 20) (20, 10, 30, 20) ...
+// ..
+// The rectangles above cover the grid fully. I want each point in the grid to
+// be contained by a single rectangle in the grid. In order to make this happen
+// I use the same logic as arrays in many programming languages: intervals are
+// closed on the left and open on the right.
 func (r *Rectangle) ContainsPt(pt Pt) bool {
 	minX, maxX := MinMax(r.Corner1.X, r.Corner2.X)
 	minY, maxY := MinMax(r.Corner1.Y, r.Corner2.Y)
-	return pt.X >= minX && pt.X <= maxX && pt.Y >= minY && pt.Y <= maxY
+	return pt.X >= minX && pt.X < maxX && pt.Y >= minY && pt.Y < maxY
 }
 
+// Intersects returns true if r intersects other and false otherwise.
+// Two rectangles don't intersect if they only share an edge. For example the
+// following rectangles don't intersect: (0, 0, 10, 10) (10, 0, 20, 10)
+// even though the right edge of the first is the left edge of the second.
+// The reason for this is that it makes it easier to work with a grid, for
+// example. (0, 0, 100, 100) can be split into a 10x10 like this:
+// (0, 0, 10, 10)  (10, 0, 20, 10)  (20, 0, 30, 10) ...
+// (0, 10, 10, 20) (10, 10, 20, 20) (20, 10, 30, 20) ...
+// ..
+// The rectangles above cover the grid fully and don't intersect each other.
+// If overlapping edges would cause intersections you would always have to make
+// a rectangle like that be 1 pixel less in terms of width and height.
 func (r *Rectangle) Intersects(other Rectangle) bool {
 	// Warning! This assumes that Corner1 is always top-left and Corner2 is
 	// bottom-right. It's worth organizing the code such that this is always
@@ -99,7 +125,7 @@ var linePointsBuffer = make([]Pt, linePointsBufferSize)
 // GetLinePoints computes a list of points that lie between the start and end
 // of a line. The points all have integer coordinates and they are continuous
 // (pixel k touches pixel k-1). This algorithm is useful if you want to draw a
-// line on a bitmap, for example. Mathematically speaking, there is an infinite
+// line on a bitmap, for example. Mathematically speaking, there are an infinite
 // number of points on a line, and their coordinates are almost always not
 // integers. So we need to decide which pixels best approximate the actual line.
 // GetLinePoints does the standard approximation that you might see in something
