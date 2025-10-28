@@ -2,26 +2,6 @@ package main
 
 import "fmt"
 
-type Line struct {
-	Start Pt
-	End   Pt
-}
-
-type Circle struct {
-	Center   Pt
-	Diameter int64
-}
-
-type Square struct {
-	Center Pt
-	Size   int64
-}
-
-type Rectangle struct {
-	Corner1 Pt
-	Corner2 Pt
-}
-
 func Min(x int64, y int64) int64 {
 	if x < y {
 		return x
@@ -46,16 +26,6 @@ func MinMax(x int64, y int64) (int64, int64) {
 	}
 }
 
-func NewRectangle(x1, y1, x2, y2 int64) (r Rectangle) {
-	r.Corner1.X, r.Corner2.X = MinMax(x1, x2)
-	r.Corner1.Y, r.Corner2.Y = MinMax(y1, y2)
-	if r.Width() == 0 || r.Height() == 0 {
-		panic(fmt.Errorf("invalid rectangle (zero width or height) - "+
-			"x1: %d y1: %d x2: %d y2: %d", x1, y1, x2, y2))
-	}
-	return
-}
-
 func Abs(x int64) int64 {
 	if x < 0 {
 		return -x
@@ -64,12 +34,25 @@ func Abs(x int64) int64 {
 	}
 }
 
+// Rectangle is meant to represent a rectangle where Min is the upper left
+// corner and Max is the lower right corner.
+type Rectangle struct {
+	Min Pt
+	Max Pt
+}
+
+func NewRectangle(min, max Pt) (r Rectangle) {
+	r.Min = min
+	r.Max = max
+	return
+}
+
 func (r *Rectangle) Width() int64 {
-	return Abs(r.Corner1.X - r.Corner2.X)
+	return Abs(r.Min.X - r.Max.X)
 }
 
 func (r *Rectangle) Height() int64 {
-	return Abs(r.Corner1.Y - r.Corner2.Y)
+	return Abs(r.Min.Y - r.Max.Y)
 }
 
 // ContainsPt returns true if pt is inside r and false otherwise.
@@ -85,9 +68,7 @@ func (r *Rectangle) Height() int64 {
 // I use the same logic as arrays in many programming languages: intervals are
 // closed on the left and open on the right.
 func (r *Rectangle) ContainsPt(pt Pt) bool {
-	minX, maxX := MinMax(r.Corner1.X, r.Corner2.X)
-	minY, maxY := MinMax(r.Corner1.Y, r.Corner2.Y)
-	return pt.X >= minX && pt.X < maxX && pt.Y >= minY && pt.Y < maxY
+	return pt.X >= r.Min.X && pt.X < r.Max.X && pt.Y >= r.Min.Y && pt.Y < r.Max.Y
 }
 
 // Intersects returns true if r intersects other and false otherwise.
@@ -103,14 +84,14 @@ func (r *Rectangle) ContainsPt(pt Pt) bool {
 // If overlapping edges would cause intersections you would always have to make
 // a rectangle like that be 1 pixel less in terms of width and height.
 func (r *Rectangle) Intersects(other Rectangle) bool {
-	// Warning! This assumes that Corner1 is always top-left and Corner2 is
+	// Warning! This assumes that Min is always top-left and Max is
 	// bottom-right. It's worth organizing the code such that this is always
 	// the case, because it makes testing for intersections significantly faster
 	// and testing for intersections is a big part of the logic in this project.
-	return r.Corner1.X < other.Corner2.X &&
-		r.Corner2.X > other.Corner1.X &&
-		r.Corner1.Y < other.Corner2.Y &&
-		r.Corner2.Y > other.Corner1.Y
+	return r.Min.X < other.Max.X &&
+		r.Max.X > other.Min.X &&
+		r.Min.Y < other.Max.Y &&
+		r.Max.Y > other.Min.Y
 }
 
 // linePointsBufferSize is an arbitrary limit for GetLinePoints. Change its
@@ -210,15 +191,15 @@ var moveRectBuffer = make([]Rectangle, moveRectBufferSize)
 // - it reached targetPos or
 // - it moved for nMaxPixels or
 // - it intersected an obstacle
-// The position of the rectangle is r.Corner1. If r can reach the targetPos,
-// then newR.Corner1 == targetPos.
+// The position of the rectangle is r.Min. If r can reach the targetPos,
+// then newR.Min == targetPos.
 func MoveRect(r Rectangle, targetPos Pt, nMaxPixels int64,
 	obstacles []Rectangle) (newR Rectangle, nPixelsLeft int64) {
 
 	// Compute the pixels along the line from the start position to the target
 	// position. We do nMaxPixels+1 because the first pixel in the line is the
 	// current position, which we do not consider a movement.
-	pts := GetLinePoints(r.Corner1, targetPos, nMaxPixels+1)
+	pts := GetLinePoints(r.Min, targetPos, nMaxPixels+1)
 
 	// Filter out obstacles that cannot be relevant:
 	// - compute a large rectangle that is the minimum rectangle that includes
@@ -230,12 +211,10 @@ func MoveRect(r Rectangle, targetPos Pt, nMaxPixels int64,
 	// for all obstacles.
 	rSize := Pt{r.Width(), r.Height()}
 	if len(pts) > 2 {
-		endRect := Rectangle{pts[len(pts)-1], pts[len(pts)-1].Plus(rSize)}
-		var largeRect Rectangle
-		largeRect.Corner1.X = Min(Min(r.Corner1.X, r.Corner2.X), Min(endRect.Corner1.X, endRect.Corner2.X))
-		largeRect.Corner1.Y = Min(Min(r.Corner1.Y, r.Corner2.Y), Min(endRect.Corner1.Y, endRect.Corner2.Y))
-		largeRect.Corner2.X = Max(Max(r.Corner1.X, r.Corner2.X), Max(endRect.Corner1.X, endRect.Corner2.X))
-		largeRect.Corner2.Y = Max(Max(r.Corner1.Y, r.Corner2.Y), Max(endRect.Corner1.Y, endRect.Corner2.Y))
+		endRect := NewRectangle(pts[len(pts)-1], pts[len(pts)-1].Plus(rSize))
+		largeRect := NewRectangle(
+			Pt{Min(r.Min.X, endRect.Min.X), Min(r.Min.Y, endRect.Min.Y)},
+			Pt{Max(r.Max.X, endRect.Max.X), Max(r.Max.Y, endRect.Max.Y)})
 
 		n := 0
 		for i := range obstacles {
@@ -251,7 +230,7 @@ func MoveRect(r Rectangle, targetPos Pt, nMaxPixels int64,
 	// the obstacles.
 	var i int64
 	for i = 1; i < int64(len(pts)); i++ {
-		r = Rectangle{pts[i], pts[i].Plus(rSize)}
+		r = NewRectangle(pts[i], pts[i].Plus(rSize))
 		if RectIntersectsRects(r, obstacles) {
 			break
 		}
@@ -260,5 +239,5 @@ func MoveRect(r Rectangle, targetPos Pt, nMaxPixels int64,
 	// At this point, pts[i-1] is the last valid position either because
 	// we reached the target, or we travelled the maximum number of pixels
 	// or we hit an obstacle at pt[i].
-	return Rectangle{pts[i-1], pts[i-1].Plus(rSize)}, nMaxPixels - i + 1
+	return NewRectangle(pts[i-1], pts[i-1].Plus(rSize)), nMaxPixels - i + 1
 }

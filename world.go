@@ -369,9 +369,7 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 	if input.JustPressed {
 		// Check if there's any brick under the click.
 		for i := range w.Bricks {
-			p := w.Bricks[i].PixelPos
-			brickSize := Pt{w.BrickPixelSize, w.BrickPixelSize}
-			r := Rectangle{p, p.Plus(brickSize)}
+			r := w.BrickBounds(w.Bricks[i].PixelPos)
 			if r.ContainsPt(input.Pos) {
 				// We were dragging a brick but we just clicked on another
 				// brick to start dragging it? This should not be possible.
@@ -382,7 +380,7 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 
 				w.Bricks[i].State = Dragged
 				dragged = &w.Bricks[i]
-				w.DraggingOffset = p.Minus(input.Pos)
+				w.DraggingOffset = w.Bricks[i].PixelPos.Minus(input.Pos)
 				break
 			}
 		}
@@ -708,7 +706,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 			b := &w.Bricks[i]
 			bottom := playHeight - w.MarginPixelSize
 			top := bottom - w.BrickPixelSize*w.NRows - w.MarginPixelSize*(w.NRows-1)
-			brickTop := w.Bricks[i].Bounds.Corner1.Y
+			brickTop := w.Bricks[i].Bounds.Min.Y
 
 			if brickTop >= top {
 				// The brick is not over the top.
@@ -765,12 +763,9 @@ func (w *World) PixelPosToCanonicalPixelPos(pixelPos Pt) (canPixelPos Pt) {
 	return
 }
 
-func (w *World) BrickBounds(posPixels Pt) (r Rectangle) {
-	r.Corner1 = posPixels
-	r.Corner2 = posPixels
-	r.Corner2.X += w.BrickPixelSize
-	r.Corner2.Y += w.BrickPixelSize
-	return
+func (w *World) BrickBounds(posPixels Pt) Rectangle {
+	return NewRectangle(posPixels,
+		posPixels.Plus(Pt{w.BrickPixelSize, w.BrickPixelSize}))
 }
 
 type GetObstaclesOption int64
@@ -803,10 +798,10 @@ func (w *World) GetObstacles(b *Brick,
 	left := w.MarginPixelSize
 	right := playWidth - w.MarginPixelSize
 
-	bottomRect := Rectangle{Pt{left, bottom}, Pt{right, bottom + 100}}
-	topRect := Rectangle{Pt{left, top - 100}, Pt{right, top}}
-	leftRect := Rectangle{Pt{left - 100, top}, Pt{left, bottom}}
-	rightRect := Rectangle{Pt{right, top}, Pt{right + 100, bottom}}
+	bottomRect := NewRectangle(Pt{left, bottom}, Pt{right, bottom + 100})
+	topRect := NewRectangle(Pt{left, top - 100}, Pt{right, top})
+	leftRect := NewRectangle(Pt{left - 100, top}, Pt{left, bottom})
+	rightRect := NewRectangle(Pt{right, top}, Pt{right + 100, bottom})
 
 	obstacles = append(obstacles, bottomRect)
 	if o == IncludingTop {
@@ -844,7 +839,7 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 		obstacles := w.GetObstacles(b, IncludingTop)
 		newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels,
 			obstacles)
-		b.SetPixelPos(newR.Corner1, w)
+		b.SetPixelPos(newR.Min, w)
 		return nPixelsLeft > 0
 	}
 
@@ -852,7 +847,7 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 		obstacles := w.GetObstacles(b, ExceptTop)
 		newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels,
 			obstacles)
-		b.SetPixelPos(newR.Corner1, w)
+		b.SetPixelPos(newR.Min, w)
 		return nPixelsLeft > 0
 	}
 
@@ -897,14 +892,14 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 		r, nMaxPixels = MoveRect(b.Bounds, targetPos, nMaxPixels, obstacles)
 
 		// Now, go towards the target's X as much as possible.
-		r, nMaxPixels = MoveRect(r, Pt{targetPos.X, r.Corner1.Y}, nMaxPixels,
+		r, nMaxPixels = MoveRect(r, Pt{targetPos.X, r.Min.Y}, nMaxPixels,
 			obstacles)
 
 		// Now, go towards the target's Y as much as possible.
-		r, nMaxPixels = MoveRect(r, Pt{r.Corner1.X, targetPos.Y}, nMaxPixels,
+		r, nMaxPixels = MoveRect(r, Pt{r.Min.X, targetPos.Y}, nMaxPixels,
 			obstacles)
 
-		b.SetPixelPos(r.Corner1, w)
+		b.SetPixelPos(r.Min, w)
 		return true
 	}
 
