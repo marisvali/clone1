@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/stretchr/testify/assert"
+	"math"
 	"testing"
 )
 
@@ -125,4 +126,96 @@ func TestRectIntersects(t *testing.T) {
 	r2 = NewRectangle(Pt{0, 0}, Pt{300, 20})
 	assert.False(t, r1.Intersects(r2))
 	assert.False(t, r2.Intersects(r1))
+}
+
+func TestGetLinePointsAll(t *testing.T) {
+	var start, end Pt
+	var nMaxPts int64
+	var actualPts, expectedPts []Pt
+
+	start, end, nMaxPts = Pt{0, 0}, Pt{10, 10}, 3
+	expectedPts = []Pt{{0, 0}, {1, 1}, {2, 2}}
+	actualPts = GetLinePoints(start, end, nMaxPts)
+	assert.Equal(t, expectedPts, actualPts)
+	OneTestGetLinePoints(t, start, end, nMaxPts)
+
+	start, end, nMaxPts = Pt{10, 10}, Pt{0, 0}, 3
+	expectedPts = []Pt{{10, 10}, {9, 9}, {8, 8}}
+	actualPts = GetLinePoints(start, end, nMaxPts)
+	assert.Equal(t, expectedPts, actualPts)
+	OneTestGetLinePoints(t, start, end, nMaxPts)
+
+	start, end, nMaxPts = Pt{0, 0}, Pt{10, 0}, 3
+	expectedPts = []Pt{{0, 0}, {1, 0}, {2, 0}}
+	actualPts = GetLinePoints(start, end, nMaxPts)
+	assert.Equal(t, expectedPts, actualPts)
+	OneTestGetLinePoints(t, start, end, nMaxPts)
+
+	start, end, nMaxPts = Pt{10, 0}, Pt{0, 0}, 3
+	expectedPts = []Pt{{10, 0}, {9, 0}, {8, 0}}
+	actualPts = GetLinePoints(start, end, nMaxPts)
+	assert.Equal(t, expectedPts, actualPts)
+	OneTestGetLinePoints(t, start, end, nMaxPts)
+
+	start, end, nMaxPts = Pt{0, 0}, Pt{0, 10}, 3
+	expectedPts = []Pt{{0, 0}, {0, 1}, {0, 2}}
+	actualPts = GetLinePoints(start, end, nMaxPts)
+	assert.Equal(t, expectedPts, actualPts)
+	OneTestGetLinePoints(t, start, end, nMaxPts)
+
+	start, end, nMaxPts = Pt{0, 10}, Pt{0, 0}, 3
+	expectedPts = []Pt{{0, 10}, {0, 9}, {0, 8}}
+	actualPts = GetLinePoints(start, end, nMaxPts)
+	assert.Equal(t, expectedPts, actualPts)
+	OneTestGetLinePoints(t, start, end, nMaxPts)
+
+	start, end, nMaxPts = Pt{0, 0}, Pt{10, 4}, 5
+	expectedPts = []Pt{{0, 0}, {1, 0}, {2, 0}, {3, 1}, {4, 1}}
+	actualPts = GetLinePoints(start, end, nMaxPts)
+	assert.Equal(t, expectedPts, actualPts)
+	OneTestGetLinePoints(t, start, end, nMaxPts)
+
+	OneTestGetLinePoints(t, Pt{10, 30}, Pt{1000, 0}, 800)
+	OneTestGetLinePoints(t, Pt{1000, 0}, Pt{10, 30}, 800)
+	OneTestGetLinePoints(t, Pt{0, 1000}, Pt{-100, 324}, 800)
+	OneTestGetLinePoints(t, Pt{-993, 193}, Pt{3922, 4}, 800)
+}
+
+func OneTestGetLinePoints(t *testing.T, start, end Pt, nMaxPts int64) {
+	pts := GetLinePoints(start, end, nMaxPts)
+
+	// Test that nMaxPts is respected.
+	assert.LessOrEqual(t, len(pts), int(nMaxPts))
+
+	// Test that the start fits.
+	assert.Equal(t, start, pts[0])
+
+	// Test that the progression from point to point is correct.
+	for i := 1; i < len(pts); i++ {
+		// The next point is different from the previous one.
+		assert.NotEqual(t, pts[i], pts[i-1])
+
+		// The next point is touching the previous one.
+		stepDist := pts[i].SquaredDistTo(pts[i-1])
+		assert.True(t, stepDist == 1 || stepDist == 2)
+
+		// The next point is closer to the end than the previous one.
+		prevDistToEnd := pts[i-1].SquaredDistTo(end)
+		distToEnd := pts[i].SquaredDistTo(end)
+		assert.Less(t, distToEnd, prevDistToEnd)
+
+		// Compute the proper point in floats.
+		// Compute the number of points between start and end.
+		diff := end.Minus(start)
+		numPts := Max(Abs(diff.X), Abs(diff.Y))
+		// How far along the line are we, at point i?
+		factor := float64(i) / float64(numPts)
+		// What is the point at this distance in the line?
+		properX := float64(start.X) + float64(diff.X)*factor
+		properY := float64(start.Y) + float64(diff.Y)*factor
+		// Make sure the pixelated point is as close to the proper point as
+		// possible.
+		assert.Less(t, math.Abs(float64(pts[i].X)-properX), 1.0)
+		assert.Less(t, math.Abs(float64(pts[i].Y)-properY), 1.0)
+	}
 }
