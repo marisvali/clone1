@@ -219,3 +219,123 @@ func OneTestGetLinePoints(t *testing.T, start, end Pt, nMaxPts int64) {
 		assert.Less(t, math.Abs(float64(pts[i].Y)-properY), 1.0)
 	}
 }
+
+func TestMoveRect(t *testing.T) {
+	obstacles := []Rectangle{}
+	obstacles = append(obstacles, NewRectangle(Pt{0, 0}, Pt{10, 10}))
+	obstacles = append(obstacles, NewRectangle(Pt{20, 0}, Pt{30, 10}))
+	obstacles = append(obstacles, NewRectangle(Pt{0, 20}, Pt{0, 30}))
+	obstacles = append(obstacles, NewRectangle(Pt{20, 20}, Pt{30, 30}))
+
+	var pos, size, targetPos, newPos Pt
+	var r, newR Rectangle
+	var nMaxPixels, nExpectedPixelsLeft, nPixelsLeft int64
+
+	// Going left to right.
+	pos = Pt{-20, 0}
+	size = Pt{10, 10}
+	targetPos = Pt{100, 0}
+	nMaxPixels = 100
+	newPos = Pt{-10, 0}
+	nExpectedPixelsLeft = 90
+	r = NewRectangle(pos, pos.Plus(size))
+	newR, nPixelsLeft = MoveRect(r, targetPos, nMaxPixels, obstacles)
+	assert.Equal(t, newR, NewRectangle(newPos, newPos.Plus(size)))
+	assert.Equal(t, nExpectedPixelsLeft, nPixelsLeft)
+	OneTestMoveRect(t, r, targetPos, nMaxPixels, obstacles)
+
+	// Going right to left.
+	pos = Pt{100, 0}
+	size = Pt{10, 10}
+	targetPos = Pt{0, 0}
+	nMaxPixels = 100
+	newPos = Pt{30, 0}
+	nExpectedPixelsLeft = 30
+	r = NewRectangle(pos, pos.Plus(size))
+	newR, nPixelsLeft = MoveRect(r, targetPos, nMaxPixels, obstacles)
+	assert.Equal(t, newR, NewRectangle(newPos, newPos.Plus(size)))
+	assert.Equal(t, nExpectedPixelsLeft, nPixelsLeft)
+	OneTestMoveRect(t, r, targetPos, nMaxPixels, obstacles)
+
+	// Going bottom to top.
+	pos = Pt{-5, -50}
+	size = Pt{10, 10}
+	targetPos = Pt{-5, 100}
+	nMaxPixels = 100
+	newPos = Pt{-5, -10}
+	nExpectedPixelsLeft = 60
+	r = NewRectangle(pos, pos.Plus(size))
+	newR, nPixelsLeft = MoveRect(r, targetPos, nMaxPixels, obstacles)
+	assert.Equal(t, newR, NewRectangle(newPos, newPos.Plus(size)))
+	assert.Equal(t, nExpectedPixelsLeft, nPixelsLeft)
+	OneTestMoveRect(t, r, targetPos, nMaxPixels, obstacles)
+
+	// Going top to bottom.
+	pos = Pt{-5, 100}
+	size = Pt{10, 10}
+	targetPos = Pt{-5, 0}
+	nMaxPixels = 100
+	newPos = Pt{-5, 30}
+	nExpectedPixelsLeft = 30
+	r = NewRectangle(pos, pos.Plus(size))
+	newR, nPixelsLeft = MoveRect(r, targetPos, nMaxPixels, obstacles)
+	assert.Equal(t, newR, NewRectangle(newPos, newPos.Plus(size)))
+	assert.Equal(t, nExpectedPixelsLeft, nPixelsLeft)
+	OneTestMoveRect(t, r, targetPos, nMaxPixels, obstacles)
+
+	// Diagonals.
+	pos = Pt{-500, 100}
+	size = Pt{5, 5}
+	targetPos = Pt{-5, 0}
+	nMaxPixels = 1000
+	OneTestMoveRect(t, NewRectangle(pos, pos.Plus(size)), targetPos, nMaxPixels,
+		obstacles)
+
+	pos = Pt{300, 500}
+	size = Pt{5, 5}
+	targetPos = Pt{-5, 0}
+	nMaxPixels = 1000
+	OneTestMoveRect(t, NewRectangle(pos, pos.Plus(size)), targetPos, nMaxPixels,
+		obstacles)
+
+	pos = Pt{-300, -250}
+	size = Pt{5, 5}
+	targetPos = Pt{-5, 0}
+	nMaxPixels = 1000
+	OneTestMoveRect(t, NewRectangle(pos, pos.Plus(size)), targetPos, nMaxPixels,
+		obstacles)
+
+	pos = Pt{300, -250}
+	size = Pt{5, 5}
+	targetPos = Pt{-5, 0}
+	nMaxPixels = 1000
+	OneTestMoveRect(t, NewRectangle(pos, pos.Plus(size)), targetPos, nMaxPixels,
+		obstacles)
+}
+
+func OneTestMoveRect(t *testing.T, r Rectangle, targetPos Pt, nMaxPixels int64,
+	obstacles []Rectangle) {
+	newR, nPixelsLeft := MoveRect(r, targetPos, nMaxPixels, obstacles)
+
+	// Check that the pixels left is correct.
+	dif := newR.Min.Minus(r.Min)
+	pixelsTravelled := Max(Abs(dif.X), Abs(dif.Y))
+	assert.Equal(t, nMaxPixels-pixelsTravelled, nPixelsLeft)
+
+	// Check that the new rectangle doesn't intersect obstacles.
+	assert.False(t, RectIntersectsRects(newR, obstacles))
+
+	// Check that by travelling just a little bit more towards the target, the
+	// new rectangle will intersect something.
+	var dir Pt
+	if dif.X != 0 {
+		dir.X = dif.X / Abs(dif.X)
+	}
+	if dif.Y != 0 {
+		dir.Y = dif.Y / Abs(dif.Y)
+	}
+
+	pos2 := newR.Min.Plus(dir)
+	newR2 := Rectangle{pos2, pos2.Plus(newR.Size())}
+	assert.True(t, RectIntersectsRects(newR2, obstacles))
+}

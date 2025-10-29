@@ -48,11 +48,15 @@ func NewRectangle(min, max Pt) (r Rectangle) {
 }
 
 func (r *Rectangle) Width() int64 {
-	return Abs(r.Min.X - r.Max.X)
+	return r.Max.X - r.Min.X
 }
 
 func (r *Rectangle) Height() int64 {
-	return Abs(r.Min.Y - r.Max.Y)
+	return r.Max.Y - r.Min.Y
+}
+
+func (r *Rectangle) Size() Pt {
+	return Pt{r.Width(), r.Height()}
 }
 
 // ContainsPt returns true if pt is inside r and false otherwise.
