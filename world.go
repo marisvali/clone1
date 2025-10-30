@@ -2,7 +2,6 @@ package main
 
 import (
 	"cmp"
-	"fmt"
 	"math"
 	"slices"
 )
@@ -160,6 +159,8 @@ type Brick struct {
 }
 
 func NewCanonicalBrick(canPos Pt, val int64, w *World) Brick {
+	// Ensure the canonical position is valid.
+	Assert(canPos.X >= 0 && canPos.X < w.NCols && canPos.Y >= -1 && canPos.Y < w.NRows)
 	b := Brick{
 		Val:   val,
 		State: Canonical,
@@ -173,6 +174,10 @@ func (b *Brick) SetPixelPos(newPos Pt, w *World) {
 	b.Bounds = w.BrickBounds(b.PixelPos)
 	b.CanonicalPos = w.PixelPosToCanonicalPos(b.PixelPos)
 	b.CanonicalPixelPos = w.CanonicalPosToPixelPos(b.CanonicalPos)
+	// Ensure the new position is valid.
+	Assert(b.PixelPos.X >= 0 && b.PixelPos.X < playWidth)
+	// Ensure the canonical position is valid.
+	Assert(b.CanonicalPos.X >= 0 && b.CanonicalPos.X < w.NCols && b.CanonicalPos.Y >= -1 && b.CanonicalPos.Y < w.NRows)
 }
 
 type WorldState int64
@@ -373,10 +378,7 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 			if r.ContainsPt(input.Pos) {
 				// We were dragging a brick but we just clicked on another
 				// brick to start dragging it? This should not be possible.
-				if dragged != nil {
-					Check(fmt.Errorf("started dragging a brick while another " +
-						"brick was already marked as dragging"))
-				}
+				Assert(dragged == nil)
 
 				w.Bricks[i].State = Dragged
 				dragged = &w.Bricks[i]
@@ -560,7 +562,7 @@ func (w *World) UpdateCanonicalBricks() {
 				}
 			}
 			lastTargetCanPos = targetCanPos
-			targetPos := b.CanonicalPixelPos
+			targetPos := w.CanonicalPosToPixelPos(targetCanPos)
 
 			// Go towards the target pos, without considering any obstacles.
 			w.MoveBrick(b, targetPos, w.CanonicalAdjustmentSpeed,
@@ -579,6 +581,7 @@ func (w *World) MergeBricks() {
 		if !foundMerge {
 			return
 		}
+		Assert(i != j)
 
 		// A merge occurred. A brick will disappear and one will have
 		// its value increased.
