@@ -104,7 +104,7 @@ func main() {
 		// results visually
 		CheckCrashes = false
 	}
-	g.world = NewWorld()
+	g.world = NewWorld(0, Level{})
 
 	// The last input caused the crash, so run the whole playthrough except the
 	// last input. This gives me a chance to see the current state of the world

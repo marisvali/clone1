@@ -167,7 +167,7 @@ func (g *Gui) UpdatePlayback() {
 
 	if targetFrameIdx != g.frameIdx {
 		// Rewind.
-		g.world = NewWorld()
+		g.world = NewWorld(0, Level{})
 
 		// Replay the world.
 		for i := int64(0); i < targetFrameIdx; i++ {
@@ -226,7 +226,7 @@ func (g *Gui) UpdateDebugCrash() {
 
 		// I have no better way to go to the previous frame than redoing all the
 		// frames from the beginning.
-		g.world = NewWorld()
+		g.world = NewWorld(0, Level{})
 		for i := range g.frameIdx {
 			g.world.Step(g.playthrough.History[i])
 		}

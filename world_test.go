@@ -25,7 +25,7 @@ func TestWorld_Regression1(t *testing.T) {
 // BenchmarkAveragePlaythrough-12    	      25	  46447304 ns/op
 // after allocating a buffer for columns only once and reusing it
 // BenchmarkAveragePlaythrough-12    	      28	  39575464 ns/op
-// after pre-allocating the slice for holding Bricks
+// after pre-allocating the slice for holding BricksParams
 // BenchmarkAveragePlaythrough-12    	      28	  40986250 ns/op
 // after using slices.SortFunc instead of sort.Slice (guided by memory profiler)
 // BenchmarkAveragePlaythrough-12    	      30	  36079253 ns/op
@@ -59,7 +59,7 @@ func BenchmarkAveragePlaythrough(b *testing.B) {
 	playthrough := DeserializePlaythrough(ReadFile("average-playthrough.clone1"))
 	println(len(playthrough.History))
 	for b.Loop() {
-		world := NewWorld()
+		world := NewWorld(playthrough.Seed, playthrough.Level)
 		for i := range len(playthrough.History) {
 			world.Step(playthrough.History[i])
 		}

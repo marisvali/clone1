@@ -28,8 +28,10 @@ type Playthrough struct {
 	InputVersion      int64
 	SimulationVersion int64
 	ReleaseVersion    int64
-	Id                uuid.UUID
-	History           []PlayerInput
+	Level
+	Id      uuid.UUID
+	Seed    int64
+	History []PlayerInput
 }
 
 func (p *Playthrough) Serialize() []byte {
@@ -37,6 +39,8 @@ func (p *Playthrough) Serialize() []byte {
 	Serialize(buf, p.InputVersion)
 	Serialize(buf, p.SimulationVersion)
 	Serialize(buf, p.ReleaseVersion)
+	Serialize(buf, p.Seed)
+	SerializeSlice(buf, p.BricksParams)
 	Serialize(buf, p.Id)
 	SerializeSlice(buf, p.History)
 	return Zip(buf.Bytes())
@@ -59,6 +63,8 @@ func DeserializePlaythrough(data []byte) (p Playthrough) {
 	}
 	Deserialize(buf, &p.SimulationVersion)
 	Deserialize(buf, &p.ReleaseVersion)
+	Deserialize(buf, &p.Seed)
+	DeserializeSlice(buf, &p.BricksParams)
 	Deserialize(buf, &p.Id)
 	DeserializeSlice(buf, &p.History)
 	return

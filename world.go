@@ -145,6 +145,15 @@ const (
 	Falling
 )
 
+type BrickParams struct {
+	Pos Pt
+	Val int64
+}
+
+type Level struct {
+	BricksParams []BrickParams
+}
+
 type Brick struct {
 	Val int64
 	// This should only be set by SetPixelPos.
@@ -191,6 +200,7 @@ const (
 
 type World struct {
 	Rand
+	Seed                     int64
 	NCols                    int64
 	NRows                    int64
 	BrickPixelSize           int64
@@ -214,6 +224,7 @@ type World struct {
 	ObstaclesBuffer          []Rectangle
 	ColumnsBuffer            [][]*Brick
 	CanPosBuffer             []Pt
+	OriginalBricks           []Brick
 }
 
 type PlayerInput struct {
@@ -225,7 +236,9 @@ type PlayerInput struct {
 }
 
 func (w *World) Initialize() {
-	w.RSeed(0)
+	w.Bricks = slices.Clone(w.OriginalBricks)
+
+	w.RSeed(w.Seed)
 	w.NCols = 6
 	w.NRows = 8
 	w.MaxBrickValue = 10
@@ -243,49 +256,17 @@ func (w *World) Initialize() {
 		w.ColumnsBuffer[i] = make([]*Brick, w.NRows)
 	}
 	w.CanPosBuffer = make([]Pt, w.NCols*w.NRows)
-
-	w.Bricks = make([]Brick, 0, w.NRows*w.NCols)
-	for y := int64(0); y < 4; y++ {
-		for x := int64(0); x < 6; x++ {
-			val := (x*y)%w.MaxBrickValue + 1
-			w.Bricks = append(w.Bricks, NewCanonicalBrick(Pt{x, y}, val, w))
-		}
-	}
-	// Test edge case with 4 bricks of the same value.
-	// w.Bricks = []Brick{}
-	// w.Bricks = append(w.Bricks, Brick{
-	// 	Val:      1,
-	// 	PixelPos: w.CanonicalPosToPixelPos(Pt{0, 0}),
-	// 	State:    Canonical,
-	// })
-	// w.Bricks = append(w.Bricks, Brick{
-	// 	Val:      1,
-	// 	PixelPos: w.CanonicalPosToPixelPos(Pt{1, 0}),
-	// 	State:    Canonical,
-	// })
-	// w.Bricks = append(w.Bricks, Brick{
-	// 	Val:      1,
-	// 	PixelPos: w.CanonicalPosToPixelPos(Pt{2, 0}),
-	// 	State:    Canonical,
-	// })
-	// w.Bricks = append(w.Bricks, Brick{
-	// 	Val:      1,
-	// 	PixelPos: w.CanonicalPosToPixelPos(Pt{0, 7}),
-	// 	State:    Canonical,
-	// })
-	// Test edge case with 3 bricks of the same value.
-	// for y := 0; y < 1; y++ {
-	// 	for x := 0; x < 3; x++ {
-	// 		w.Bricks = append(w.Bricks, Brick{
-	// 			Val: 3,
-	// 			// PosMat:    Pt{x, y},
-	// 			PixelPos: w.CanonicalPosToPixelPos(Pt{x, y}),
-	// 		})
-	// 	}
-	// }
 }
 
-func NewWorld() (w World) {
+func NewWorld(seed int64, l Level) (w World) {
+	w.Seed = seed
+	for i := range l.BricksParams {
+		w.OriginalBricks = append(w.OriginalBricks, NewCanonicalBrick(
+			l.BricksParams[i].Pos,
+			l.BricksParams[i].Val,
+			&w))
+	}
+
 	w.Initialize()
 	return w
 }
@@ -348,9 +329,9 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 	//
 	// Check if bricks intersect each other or are out of bounds.
 	// {
-	// 	for i := range w.Bricks {
-	// 		obstacles := w.GetObstacles(&w.Bricks[i], IncludingTop)
-	// 		brick := w.BrickBounds(w.Bricks[i].PixelPos)
+	// 	for i := range w.BricksParams {
+	// 		obstacles := w.GetObstacles(&w.BricksParams[i], IncludingTop)
+	// 		brick := w.BrickBounds(w.BricksParams[i].PixelPos)
 	// 		// Don't use RectIntersectsRects because I want to be able to
 	// 		// put a breakpoint here and see which rect intersects which.
 	// 		for j := range obstacles {
