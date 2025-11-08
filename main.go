@@ -70,12 +70,12 @@ type Gui struct {
 
 func main() {
 	// ebiten.SetWindowSize(900, 900)
-	ebiten.SetWindowPosition(50, 100)
+	ebiten.SetWindowPosition(1000, 100)
 
 	var g Gui
 	g.playthrough.InputVersion = InputVersion
-	g.playthrough.SimulationVersion = 0 // SimulationVersion
-	g.playthrough.ReleaseVersion = 0    // ReleaseVersion
+	g.playthrough.SimulationVersion = SimulationVersion
+	g.playthrough.ReleaseVersion = 0 // ReleaseVersion
 	g.debugMarginWidth = 0
 	g.debugMarginHeight = 100
 	g.recordingFile = "last-recording.clone1"
@@ -84,9 +84,16 @@ func main() {
 	g.FrameSkipAltArrow = 1
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
-	g.slowdownFactor = 1
+	g.slowdownFactor = 10
 	g.state = GameOngoing
-	// g.state = Playback
+	g.state = Playback
+
+	// !!! Hardcoded, remove after.
+	// l := &g.playthrough.Level
+	// l.BricksParams = append(l.BricksParams, BrickParams{Pt{0, 0}, 1})
+	// l.BricksParams = append(l.BricksParams, BrickParams{Pt{1, 0}, 1})
+	// l.BricksParams = append(l.BricksParams, BrickParams{Pt{2, 0}, 1})
+	// l.BricksParams = append(l.BricksParams, BrickParams{Pt{0, 7}, 1})
 
 	if g.state == Playback || g.state == DebugCrash {
 		g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))
@@ -104,7 +111,8 @@ func main() {
 		// results visually
 		CheckCrashes = false
 	}
-	g.world = NewWorld(0, Level{})
+
+	g.world = NewWorldFromPlaythrough(g.playthrough)
 
 	// The last input caused the crash, so run the whole playthrough except the
 	// last input. This gives me a chance to see the current state of the world

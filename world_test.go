@@ -2,15 +2,19 @@ package main
 
 import (
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
 
-func TestWorld_Regression1(t *testing.T) {
-	playthrough := DeserializePlaythrough(ReadFile("average-playthrough.clone1"))
-	expected := string(ReadFile("average-playthrough.clone1-hash"))
-	actual := RegressionId(&playthrough)
-	println(actual)
-	assert.Equal(t, expected, actual)
+func TestWorld_RegressionTests(t *testing.T) {
+	tests := GetFiles(os.DirFS(".").(FS), "regression-tests", "*.clone1")
+	for _, test := range tests {
+		playthrough := DeserializePlaythrough(ReadFile(test))
+		expected := string(ReadFile(test + "-hash"))
+		actual := RegressionId(playthrough)
+		println(actual)
+		assert.Equal(t, expected, actual)
+	}
 }
 
 // Playthrough with 5899 frames.
@@ -59,7 +63,7 @@ func BenchmarkAveragePlaythrough(b *testing.B) {
 	playthrough := DeserializePlaythrough(ReadFile("average-playthrough.clone1"))
 	println(len(playthrough.History))
 	for b.Loop() {
-		world := NewWorld(playthrough.Seed, playthrough.Level)
+		world := NewWorldFromPlaythrough(playthrough)
 		for i := range len(playthrough.History) {
 			world.Step(playthrough.History[i])
 		}

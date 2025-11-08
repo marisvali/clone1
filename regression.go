@@ -104,12 +104,12 @@ func (w *World) StateBytes() []byte {
 // involves. If it's just the player starting with some obstacles and no enemies
 // and winning after 1 frame, that won't catch errors with refactoring enemy
 // behavior.
-func RegressionId(p *Playthrough) string {
+func RegressionId(p Playthrough) string {
 	// Create a new SHA-256 hash
 	hash := sha256.New()
 
 	// Run the playthrough.
-	w := NewWorld(p.Seed, p.Level)
+	w := NewWorldFromPlaythrough(p)
 
 	// Write the current state of the World to the hash.
 	hash.Write(w.StateBytes())

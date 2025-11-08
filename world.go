@@ -2,9 +2,28 @@ package main
 
 import (
 	"cmp"
+	"fmt"
 	"math"
 	"slices"
 )
+
+// SimulationVersion is the version of the simulation currently implemented
+// by the World.
+// The simulation is an abstract mapping between input given by the player and
+// output received by the player. The input usually consists of mouse positions
+// and clicks. The output depends on the current design of the simulation but
+// can be things like, the position and health of the player and the enemies
+// and the visible regions the player can jump to.
+// The implementation is not relevant for the SimulationVersion. The
+// calculations to go from input to output can change. The exact structs for
+// the input and output can change (e.g. int64 changes to int32). As long as
+// the information is the same and the mapping is the same, the
+// SimulationVersion should remain the same.
+// The main purpose of SimulationVersion is to allow for refactoring and
+// regression tests. If the SimulationVersion doesn't change, a playthrough
+// that was recorded with the same SimulationVersion can be made to be replayed
+// with the current simulation code, even if everything else changed.
+const SimulationVersion = 999
 
 // World rules (physics)
 // ---------------------
@@ -235,10 +254,8 @@ type PlayerInput struct {
 	TriggerComingUp bool
 }
 
-func (w *World) Initialize() {
-	w.Bricks = slices.Clone(w.OriginalBricks)
-
-	w.RSeed(w.Seed)
+func NewWorld(seed int64, l Level) (w World) {
+	// Set constants and buffers.
 	w.NCols = 6
 	w.NRows = 8
 	w.MaxBrickValue = 10
@@ -256,9 +273,8 @@ func (w *World) Initialize() {
 		w.ColumnsBuffer[i] = make([]*Brick, w.NRows)
 	}
 	w.CanPosBuffer = make([]Pt, w.NCols*w.NRows)
-}
 
-func NewWorld(seed int64, l Level) (w World) {
+	// Transform Level parameters into the World's initial state.
 	w.Seed = seed
 	for i := range l.BricksParams {
 		w.OriginalBricks = append(w.OriginalBricks, NewCanonicalBrick(
@@ -269,6 +285,24 @@ func NewWorld(seed int64, l Level) (w World) {
 
 	w.Initialize()
 	return w
+}
+
+// NewWorldFromPlaythrough checks if the Playthrough has the same simulation
+// version as the current code.
+func NewWorldFromPlaythrough(p Playthrough) (w World) {
+	if p.SimulationVersion != SimulationVersion {
+		Check(fmt.Errorf("can't run this playthrough with the current "+
+			"simulation - we are at SimulationVersion %d and playthrough "+
+			"was generated with SimulationVersion version %d",
+			SimulationVersion, p.SimulationVersion))
+	}
+	w = NewWorld(p.Seed, p.Level)
+	return
+}
+
+func (w *World) Initialize() {
+	w.RSeed(w.Seed)
+	w.Bricks = slices.Clone(w.OriginalBricks)
 }
 
 func (w *World) Step(input PlayerInput) {
@@ -509,11 +543,8 @@ func (w *World) UpdateCanonicalBricks() {
 	for _, column := range columns {
 		// Sort bricks in the column by their Y position, so that we can iterate
 		// through bricks from bottom to top.
-		// sort.Slice(column, func(i, j int) bool {
-		// 	return column[i].PixelPos.Y > column[j].PixelPos.Y
-		// })
 		slices.SortFunc(column, func(b1, b2 *Brick) int {
-			return cmp.Compare(b1.PixelPos.Y, b2.PixelPos.Y)
+			return cmp.Compare(b2.PixelPos.Y, b1.PixelPos.Y)
 		})
 
 		lastTargetCanPos := Pt{-1000, -1000}

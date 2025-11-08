@@ -64,7 +64,7 @@ func (g *Gui) UpdateGameOngoing() {
 	g.accumulatedInput.TriggerComingUp = g.accumulatedInput.TriggerComingUp || input.TriggerComingUp
 	if g.frameIdx%g.slowdownFactor == 0 {
 		// Save the input in the playthrough.
-		g.playthrough.History = append(g.playthrough.History, input)
+		g.playthrough.History = append(g.playthrough.History, g.accumulatedInput)
 		if g.recordingFile != "" {
 			// IMPORTANT: save the playthrough before stepping the World. If
 			// a bug in the World causes it to crash, we want to save the input
@@ -167,7 +167,7 @@ func (g *Gui) UpdatePlayback() {
 
 	if targetFrameIdx != g.frameIdx {
 		// Rewind.
-		g.world = NewWorld(0, Level{})
+		g.world = NewWorldFromPlaythrough(g.playthrough)
 
 		// Replay the world.
 		for i := int64(0); i < targetFrameIdx; i++ {
@@ -226,7 +226,7 @@ func (g *Gui) UpdateDebugCrash() {
 
 		// I have no better way to go to the previous frame than redoing all the
 		// frames from the beginning.
-		g.world = NewWorld(0, Level{})
+		g.world = NewWorldFromPlaythrough(g.playthrough)
 		for i := range g.frameIdx {
 			g.world.Step(g.playthrough.History[i])
 		}

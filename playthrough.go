@@ -39,9 +39,9 @@ func (p *Playthrough) Serialize() []byte {
 	Serialize(buf, p.InputVersion)
 	Serialize(buf, p.SimulationVersion)
 	Serialize(buf, p.ReleaseVersion)
-	Serialize(buf, p.Seed)
-	SerializeSlice(buf, p.BricksParams)
+	SerializeSlice(buf, p.Level.BricksParams)
 	Serialize(buf, p.Id)
+	Serialize(buf, p.Seed)
 	SerializeSlice(buf, p.History)
 	return Zip(buf.Bytes())
 }
@@ -63,9 +63,9 @@ func DeserializePlaythrough(data []byte) (p Playthrough) {
 	}
 	Deserialize(buf, &p.SimulationVersion)
 	Deserialize(buf, &p.ReleaseVersion)
-	Deserialize(buf, &p.Seed)
 	DeserializeSlice(buf, &p.BricksParams)
 	Deserialize(buf, &p.Id)
+	Deserialize(buf, &p.Seed)
 	DeserializeSlice(buf, &p.History)
 	return
 }
