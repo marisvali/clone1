@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
@@ -15,6 +16,53 @@ func TestWorld_RegressionTests(t *testing.T) {
 		println(actual)
 		assert.Equal(t, expected, actual)
 	}
+}
+
+// TestWorld_ConvertRegressionTests should be used whenever we go from
+// SimulationVersion = X to SimulationVersion = 999 or vice versa.
+//
+// Here is an example of the process I envision:
+// A. I am at version 3 which I committed to
+// B. I switch to 999 and I add features and play around
+// C. I am done adding features and I start to harden my code.
+// D. I add a regression test consisting of a complex playthrough.
+// E. I refactor for clarity and maintainability.
+// F. I refactor for performance.
+// G. I add automated tests for geometric algorithms I am now sure I need.
+// H. I add regression tests for various edge cases.
+// I. I find bugs and missing things while testing edge cases. I add fixes,
+// including changes to the simulation logic, which maybe invalidates some other
+// regression tests, but maybe it doesn't.
+// J. I commit to a final version 4 that is releasable.
+//
+// The steps above contain a point of friction: when do I change
+// SimulationVersion in the code? I need to change the actual code and commit.
+// Since all my regression tests are recorded playthroughs which contain the
+// SimulationVersion, it means I should change SimulationVersion from 3 to 4
+// as soon as I add my first regression test, at step D. Either this, or I have
+// to redo all my regression tests when I reach step J and I commit to final
+// version 4. But if I set SimulationVersion to 4 at step D, what do I do if I
+// need to change some things quite drastically at step I? Then I have in my git
+// history some commits that say SimulationVersion is 4, but really, are early
+// attempts at 4, and later commits with SimulationVersion = 4 are really the
+// ones that capture the logic of version 4.
+// A simple way to cut through all of that is to make it easy to switch from
+// 999 to 4 only at the very end, at step J. While I am still testing and
+// tweaking, I am at 999. I only go to 4 when I am pretty sure I am done and I
+// want to commit to 4. Of course, minor tweaks to 4 remain possible, and if
+// major changes are necessary, I can just make a 5. But that should be very
+// rare because I had a chance to play around and check everything while I was
+// still on 999.
+func TestWorld_ConvertRegressionTests(t *testing.T) {
+	tests := GetFiles(os.DirFS(".").(FS), "regression-tests", "*.clone1")
+	for _, test := range tests {
+		playthrough := DeserializePlaythrough(ReadFile(test))
+		fmt.Printf("%s changing SimulationVersion from %d to %d\n", test,
+			playthrough.SimulationVersion, SimulationVersion)
+		playthrough.SimulationVersion = SimulationVersion
+		WriteFile(test, playthrough.Serialize())
+	}
+	assert.True(t, true)
 }
 
 // Playthrough with 5899 frames.
