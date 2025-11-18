@@ -117,13 +117,13 @@ func main() {
 	g.FrameSkipAltArrow = 1
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
-	g.slowdownFactor = 10
+	g.slowdownFactor = 1
 	g.state = GameOngoing
-	g.state = Playback
 
-	// !!! Hardcoded, remove after.
-	// l := &g.playthrough.Level
-	// l.BricksParams = append(l.BricksParams, BrickParams{Pt{0, 0}, 1})
+	if len(os.Args) == 2 {
+		g.recordingFile = os.Args[1]
+		g.state = Playback
+	}
 
 	if g.state == Playback || g.state == DebugCrash {
 		g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))
