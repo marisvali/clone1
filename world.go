@@ -728,15 +728,11 @@ func (w *World) StepComingUp(justEnteredState bool) {
 				continue
 			}
 
-			// Brick is over the top. If it's not a Dragged brick, the game is
-			// over.
-			if w.Bricks[i].State != Dragged {
-				w.State = Lost
-				return
-			}
-
-			// The dragged brick is moved over the top. Try to move it down so
-			// that it's not over the top anymore.
+			// The brick is over the top. Try to move it down so that it's not
+			// over the top anymore. This should generally work only for
+			// dragged bricks and bricks who were recently dragged and now are
+			// in the middle of adjusting their position, because only those
+			// bricks will have space to be moved down.
 			hitObstacle := w.MoveBrick(b, b.PixelPos.Plus(Pt{0, 1000}),
 				top-brickTop, StopAtFirstObstacleExceptTop)
 
