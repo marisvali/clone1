@@ -1,0 +1,9 @@
+Setup
+-----
+
+The player drags a brick at the top and lets it go. There is space below. The brick starts falling. Within a few frames of the brick falling, the "coming up" event is triggered.
+
+Test
+----
+
+The "coming up" event should move the falling brick over the top. Once the "coming up" even is done, the falling brick should be moved down so that it's no longer over the top, and the game should continue.

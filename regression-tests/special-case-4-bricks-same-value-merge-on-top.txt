@@ -1,0 +1,18 @@
+Setup
+-----
+
+There are 4 bricks of the same value:
+- A and B, next to each other on the ground
+- C, which is falling towards A
+- D, which the player drags
+
+The player drags brick D right between A and B and holds it there. Brick D does not merge with A or B, as it is not close enough to either one. But D intersects with A and B as they all have the same value and the game allows bricks of the same value to intersect.
+
+Brick C falls on A and merges with it, becoming a different value than B and D. Immediately after the merge, the new A intersects with D, even though they have different values.
+
+Test
+----
+
+The situation should not result in an error or game over. The game should adjust itself in a reasonable way. The bricks should give way to each other and place themselves such that the rules of the game are respected again, as soon as possible.
+
+The reason why this shouldn't be an error/crash case is that we do not want to change any of the rules that led to this situation.

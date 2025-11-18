@@ -1,0 +1,9 @@
+Setup
+-----
+
+A longer game where the player drags bricks around and tries to match them while bricks are periodically coming up. The player is actively trying to win.
+
+Test
+----
+
+The game should exhibit normal, expected behavior. No crashes, no asserts, no breakdown of physics (e.g. bricks become intersected and get stuck overlapping). The point is to test as much of the simulation as possible in one go.

@@ -1,0 +1,9 @@
+Setup
+-----
+
+The player drags a brick at the top of a 6-brick column, on row 8, but slightly off from the canonical position. They let go of the brick. The dragged brick becomes canonical and starts going into position. While it is going to position, the "coming up" event is triggered.
+
+Test
+----
+
+The "coming up" event should move the canonical brick well over the top. Once the "coming up" even is done, the canonical brick should be moved down so that it's no longer over the top, and then it should continue to go towards its slot.

@@ -1,0 +1,9 @@
+Setup
+-----
+
+The player drags a brick at the top of a 7-brick column. They let go of the brick. The dragged brick becomes canonical and starts going into position. While it is going to position, the "coming up" event is triggered.
+
+Test
+----
+
+The "coming up" event should move the canonical brick over the top. Then, since there is no recovery possible, the game should be over.

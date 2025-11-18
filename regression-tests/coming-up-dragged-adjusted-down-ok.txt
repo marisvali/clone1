@@ -1,0 +1,9 @@
+Setup
+-----
+
+The player drags a brick at the top and holds it there. There is space below. While the player is still holding on to the brick, the "coming up" event is triggered.
+
+Test
+----
+
+The "coming up" event should move the dragged brick over the top. Once the "coming up" even is done, the dragged brick should be moved down so that it's no longer over the top, and the game should continue.
