@@ -124,9 +124,6 @@ func main() {
 	// !!! Hardcoded, remove after.
 	// l := &g.playthrough.Level
 	// l.BricksParams = append(l.BricksParams, BrickParams{Pt{0, 0}, 1})
-	// l.BricksParams = append(l.BricksParams, BrickParams{Pt{1, 0}, 1})
-	// l.BricksParams = append(l.BricksParams, BrickParams{Pt{2, 0}, 1})
-	// l.BricksParams = append(l.BricksParams, BrickParams{Pt{0, 7}, 1})
 
 	if g.state == Playback || g.state == DebugCrash {
 		g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))

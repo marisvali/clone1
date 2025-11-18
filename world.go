@@ -205,7 +205,7 @@ func (b *Brick) SetPixelPos(newPos Pt, w *World) {
 	// Ensure the new position is valid.
 	Assert(b.PixelPos.X >= 0 && b.PixelPos.X < playWidth)
 	// Ensure the canonical position is valid.
-	Assert(b.CanonicalPos.X >= 0 && b.CanonicalPos.X < w.NCols && b.CanonicalPos.Y >= -1 && b.CanonicalPos.Y < w.NRows)
+	Assert(b.CanonicalPos.X >= 0 && b.CanonicalPos.X < w.NCols && b.CanonicalPos.Y >= -1 && b.CanonicalPos.Y <= w.NRows)
 }
 
 type WorldState int64
