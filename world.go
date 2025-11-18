@@ -303,6 +303,7 @@ func NewWorldFromPlaythrough(p Playthrough) (w World) {
 func (w *World) Initialize() {
 	w.RSeed(w.Seed)
 	w.Bricks = slices.Clone(w.OriginalBricks)
+	w.State = Regular
 }
 
 func (w *World) Step(input PlayerInput) {
