@@ -57,11 +57,19 @@ func (g *Gui) UpdateGameOngoing() {
 	// If the game is slowed down, remember clicks and key presses that happen
 	// during frames where we don't update the World, so that they can be sent
 	// to the World in the next frame where the World is updated.
-	g.accumulatedInput.Pos = input.Pos
-	g.accumulatedInput.JustPressed = g.accumulatedInput.JustPressed || input.JustPressed
-	g.accumulatedInput.JustReleased = g.accumulatedInput.JustReleased || input.JustReleased
-	g.accumulatedInput.ResetWorld = g.accumulatedInput.ResetWorld || input.ResetWorld
-	g.accumulatedInput.TriggerComingUp = g.accumulatedInput.TriggerComingUp || input.TriggerComingUp
+	if input.EventOccurred() {
+		// When the player clicks something, we remember the click and the
+		// position.
+		g.accumulatedInput = input
+	} else {
+		// We remember the last mouse position, but only if there isn't a click
+		// recorded already in g.accumulatedInput. If a click was recorded in
+		// g.accumulatedInput, we want to remember the Pos at which the click
+		// occurred.
+		if !g.accumulatedInput.EventOccurred() {
+			g.accumulatedInput.Pos = input.Pos
+		}
+	}
 	if g.frameIdx%g.slowdownFactor == 0 {
 		// Save the input in the playthrough.
 		g.playthrough.History = append(g.playthrough.History, g.accumulatedInput)

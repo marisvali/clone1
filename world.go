@@ -254,6 +254,10 @@ type PlayerInput struct {
 	TriggerComingUp bool
 }
 
+func (p *PlayerInput) EventOccurred() bool {
+	return p.JustPressed || p.JustReleased || p.TriggerComingUp || p.ResetWorld
+}
+
 func NewWorld(seed int64, l Level) (w World) {
 	// Set constants and buffers.
 	w.NCols = 6
