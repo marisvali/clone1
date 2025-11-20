@@ -360,9 +360,21 @@ func (w *World) DetermineDraggedBrick(input PlayerInput) {
 		for i := range w.Bricks {
 			r := w.BrickBounds(w.Bricks[i].PixelPos)
 			if r.ContainsPt(input.Pos) {
-				// We were dragging a brick but we just clicked on another
-				// brick to start dragging it? This should not be possible.
+				// We can check here if dragged == nil. If not, it means that
+				// somehow the player clicked a brick, didn't release it and
+				// then clicked on another brick. This should not be possible
+				// unless there is a hardware failure or the OS/browser/etc
+				// doesn't send the game all the hardware signals from the
+				// player. I will leave leave the assert here during development
+				// to catch errors in my logic. But I will also handle failures
+				// gracefully, for when the assert is disabled.
 				Assert(dragged == nil)
+
+				if dragged != nil {
+					// Make the previously dragged brick canonical and let the
+					// canonical adjustment system handle it.
+					dragged.State = Canonical
+				}
 
 				w.Bricks[i].State = Dragged
 				dragged = &w.Bricks[i]
