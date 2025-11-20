@@ -1,0 +1,9 @@
+Setup
+-----
+
+The player drags a brick and holds it. The "coming up" event is triggered. The player releases the left mouse button while the coming up event is executing.
+
+Test
+----
+
+Once the coming up event is done, the brick should start falling as it is no longer dragged. This way we can see that the release of the brick during the coming up event was registered.

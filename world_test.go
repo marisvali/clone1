@@ -13,7 +13,9 @@ func TestWorld_RegressionTests(t *testing.T) {
 		playthrough := DeserializePlaythrough(ReadFile(test))
 		expected := string(ReadFile(test + "-hash"))
 		actual := RegressionId(playthrough)
+		println(test)
 		println(actual)
+		println()
 		assert.Equal(t, expected, actual)
 	}
 }

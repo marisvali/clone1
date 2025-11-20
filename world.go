@@ -330,6 +330,10 @@ func (w *World) Step(input PlayerInput) {
 		w.PreviousState = w.State
 	}
 
+	// We want to register if the player clicked a brick or released an already
+	// dragged brick both during Regular play and during a ComingUp event.
+	w.DetermineDraggedBrick(input)
+
 	switch w.State {
 	case Regular:
 		w.StepRegular(justEnteredState, input)
@@ -341,6 +345,39 @@ func (w *World) Step(input PlayerInput) {
 	// Consider testing for game over here, as well, or inside StepRegular, just
 	// as an added precaution, even if I can't think of a way in which a game
 	// over could be reached during a StepRegular.
+}
+
+func (w *World) DetermineDraggedBrick(input PlayerInput) {
+	var dragged *Brick
+	for i := range w.Bricks {
+		if w.Bricks[i].State == Dragged {
+			dragged = &w.Bricks[i]
+		}
+	}
+
+	if input.JustPressed {
+		// Check if there's any brick under the click.
+		for i := range w.Bricks {
+			r := w.BrickBounds(w.Bricks[i].PixelPos)
+			if r.ContainsPt(input.Pos) {
+				// We were dragging a brick but we just clicked on another
+				// brick to start dragging it? This should not be possible.
+				Assert(dragged == nil)
+
+				w.Bricks[i].State = Dragged
+				dragged = &w.Bricks[i]
+				w.DraggingOffset = w.Bricks[i].PixelPos.Minus(input.Pos)
+				break
+			}
+		}
+	}
+
+	if input.JustReleased {
+		if dragged != nil {
+			dragged.State = Canonical
+			return
+		}
+	}
 }
 
 func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
@@ -388,30 +425,6 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 	for i := range w.Bricks {
 		if w.Bricks[i].State == Dragged {
 			dragged = &w.Bricks[i]
-		}
-	}
-
-	if input.JustPressed {
-		// Check if there's any brick under the click.
-		for i := range w.Bricks {
-			r := w.BrickBounds(w.Bricks[i].PixelPos)
-			if r.ContainsPt(input.Pos) {
-				// We were dragging a brick but we just clicked on another
-				// brick to start dragging it? This should not be possible.
-				Assert(dragged == nil)
-
-				w.Bricks[i].State = Dragged
-				dragged = &w.Bricks[i]
-				w.DraggingOffset = w.Bricks[i].PixelPos.Minus(input.Pos)
-				break
-			}
-		}
-	}
-
-	if input.JustReleased {
-		if dragged != nil {
-			dragged.State = Canonical
-			return
 		}
 	}
 
