@@ -240,10 +240,12 @@ type World struct {
 	SolvedFirstState         bool
 	AssertionFailed          bool
 	MaxBrickValue            int64
+	MaxInitialBrickValue     int64
 	ObstaclesBuffer          []Rectangle
 	ColumnsBuffer            [][]*Brick
 	CanPosBuffer             []Pt
 	OriginalBricks           []Brick
+	FirstComingUp            bool
 }
 
 type PlayerInput struct {
@@ -262,15 +264,15 @@ func NewWorld(seed int64, l Level) (w World) {
 	// Set constants and buffers.
 	w.NCols = 6
 	w.NRows = 8
-	w.MaxBrickValue = 10
+	w.MaxBrickValue = 30
+	w.MaxInitialBrickValue = 5
 	w.MarginPixelSize = 30
 	w.BrickPixelSize = (playWidth - (w.MarginPixelSize * (w.NCols + 1))) / w.NCols
 	w.DragSpeed = 100
 	w.CanonicalAdjustmentSpeed = 21
 	w.BrickFallAcceleration = 2
 	w.ComingUpDeceleration = 2
-	w.RegularCooldown = 20
-	w.RegularCooldownIdx = w.RegularCooldown
+	w.RegularCooldown = 738
 	w.ObstaclesBuffer = make([]Rectangle, w.NCols*w.NRows+4)
 	w.ColumnsBuffer = make([][]*Brick, w.NCols)
 	for i := range w.ColumnsBuffer {
@@ -306,8 +308,18 @@ func NewWorldFromPlaythrough(p Playthrough) (w World) {
 
 func (w *World) Initialize() {
 	w.RSeed(w.Seed)
-	w.Bricks = slices.Clone(w.OriginalBricks)
-	w.State = Regular
+	if len(w.OriginalBricks) == 0 {
+		w.CreateFirstRowsOfBricks()
+		w.RegularCooldownIdx = 0
+	} else {
+		w.Bricks = slices.Clone(w.OriginalBricks)
+		w.RegularCooldownIdx = w.RegularCooldown
+	}
+	w.SolvedFirstState = false
+	w.FirstComingUp = true
+
+	w.PreviousState = ComingUp
+	w.State = ComingUp
 }
 
 func (w *World) Step(input PlayerInput) {
@@ -393,18 +405,11 @@ func (w *World) DetermineDraggedBrick(input PlayerInput) {
 }
 
 func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
-	if justEnteredState {
-		w.RegularCooldownIdx = w.RegularCooldown
+	w.RegularCooldownIdx--
+	if w.RegularCooldownIdx <= 0 {
+		w.State = ComingUp
+		return
 	}
-
-	// TODO: change this
-	// Disable for now the regular event of bricks coming up, to allow easier
-	// testing during development.
-	// w.RegularCooldownIdx--
-	// if w.RegularCooldownIdx == 0 {
-	// 	w.State = ComingUp
-	// 	return
-	// }
 
 	w.UpdateDraggedBrick(input)
 	w.UpdateFallingBricks()
@@ -699,6 +704,58 @@ func (w *World) FindMergingBricks() (foundMerge bool, i, j int) {
 	return false, 0, 0
 }
 
+func (w *World) CreateFirstRowsOfBricks() {
+	w.Bricks = w.Bricks[:0]
+
+	// Create the first row.
+	for x := range w.NCols {
+		val := w.RInt(1, w.MaxInitialBrickValue-1)
+		w.Bricks = append(w.Bricks, NewCanonicalBrick(Pt{x, 0}, val, w))
+	}
+
+	// Create a row below that will not cause any merges.
+	w.CreateNewRowOfBricks(w.MaxInitialBrickValue - 1)
+
+	// Set some brick to have the max value.
+	randomIndex := w.RInt(0, int64(len(w.Bricks))-1)
+	w.Bricks[randomIndex].Val = w.MaxInitialBrickValue
+}
+
+func (w *World) CurrentMaxVal() int64 {
+	currentMaxVal := int64(0)
+	for i := range w.Bricks {
+		if w.Bricks[i].Val > currentMaxVal {
+			currentMaxVal = w.Bricks[i].Val
+		}
+	}
+	return currentMaxVal
+}
+
+func (w *World) CreateNewRowOfBricks(maxVal int64) {
+	for x := range w.NCols {
+		// Get a value that is different from the value of the brick right
+		// above (if there is a brick right above).
+		newPos := Pt{x, -1}
+		posAbove := Pt{x, 0}
+		forbiddenValue := int64(0)
+		for _, b := range w.Bricks {
+			if b.CanonicalPos == posAbove {
+				forbiddenValue = b.Val
+			}
+		}
+
+		val := int64(0)
+		for {
+			val = w.RInt(1, maxVal)
+			if val != forbiddenValue {
+				break
+			}
+		}
+
+		w.Bricks = append(w.Bricks, NewCanonicalBrick(newPos, val, w))
+	}
+}
+
 func (w *World) StepComingUp(justEnteredState bool) {
 	if justEnteredState {
 		// We have to compute the speed we need to start with in order to
@@ -723,11 +780,10 @@ func (w *World) StepComingUp(justEnteredState bool) {
 		// distance when we reach speed 0 or right before.
 		w.ComingUpSpeed = speed
 		w.ComingUpDistanceLeft = w.BrickPixelSize + w.MarginPixelSize
-
-		// Create a new row of bricks.
-		for x := range w.NCols {
-			val := w.RInt(1, w.MaxBrickValue)
-			w.Bricks = append(w.Bricks, NewCanonicalBrick(Pt{x, -1}, val, w))
+		if w.FirstComingUp {
+			w.FirstComingUp = false
+		} else {
+			w.CreateNewRowOfBricks(w.CurrentMaxVal() - 2)
 		}
 	}
 
@@ -773,6 +829,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 				return
 			}
 		}
+		w.RegularCooldownIdx = w.RegularCooldown
 		w.State = Regular
 		return
 	}

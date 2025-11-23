@@ -119,6 +119,7 @@ func main() {
 	g.FrameSkipArrow = 1
 	g.slowdownFactor = 1
 	g.state = GameOngoing
+	// g.state = DebugCrash
 
 	if len(os.Args) == 2 {
 		g.recordingFile = os.Args[1]

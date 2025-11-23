@@ -63,18 +63,6 @@ func (g *Gui) DrawPlayRegion(screen *ebiten.Image) {
 			DrawSprite(screen, g.imgBlank, float64(pos.X), float64(pos.Y),
 				float64(g.world.BrickPixelSize),
 				float64(g.world.BrickPixelSize))
-
-			brickRegion := SubImage(screen, image.Rect(int(pos.X), int(pos.Y),
-				int(pos.X+g.world.BrickPixelSize),
-				int(pos.Y+g.world.BrickPixelSize)))
-			g.drawText(brickRegion, fmt.Sprintf("%dx%d", x, y), true,
-				true,
-				color.NRGBA{
-					R: 0,
-					G: 100,
-					B: 0,
-					A: 255,
-				})
 		}
 	}
 
@@ -102,14 +90,14 @@ func (g *Gui) DrawPlayRegion(screen *ebiten.Image) {
 		})
 	}
 
-	g.drawText(screen, fmt.Sprintf("ActualTPS: %f", ebiten.ActualTPS()), false,
-		false,
-		color.NRGBA{
-			R: 0,
-			G: 100,
-			B: 0,
-			A: 255,
-		})
+	// g.drawText(screen, fmt.Sprintf("ActualTPS: %f", ebiten.ActualTPS()), false,
+	// 	false,
+	// 	color.NRGBA{
+	// 		R: 0,
+	// 		G: 100,
+	// 		B: 0,
+	// 		A: 255,
+	// 	})
 
 	if g.state == Playback {
 		DrawSprite(screen, g.imgCursor,
@@ -341,7 +329,7 @@ func (g *Gui) loadGuiData() {
 	for {
 		CheckFailed = nil
 		g.imgBlank = LoadImage(g.FSys, "data/gui/blank.png")
-		for i := 1; i <= 10; i++ {
+		for i := int64(1); i <= g.world.MaxBrickValue; i++ {
 			filename := fmt.Sprintf("data/gui/%02d.png", i)
 			g.imgBrick[i] = LoadImage(g.FSys, filename)
 		}
