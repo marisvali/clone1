@@ -25,6 +25,61 @@ import (
 // with the current simulation code, even if everything else changed.
 const SimulationVersion = 999
 
+// World coordinates
+// -----------------
+//
+// The World uses a pixel-based coordinate system where (0, 0) is the top-left
+// point. This follows ebitengine's coordinate system on purpose, so that the
+// mapping between the World coordinate system and the UI coordinate system is
+// as simple as possible. A unit in the game world is expected to be a pixel in
+// the UI, which is approximately a pixel on the player's actual device.
+//
+// The logic is the following:
+// - The World defines the size the brick and the space between bricks.
+// - The World defines the number of rows and columns.
+// - Together, these determine the size of the play area that the UI must
+// render.
+// - The UI then defines the sizes of its other elements (buttons, menus etc)
+// relative to the size of the play area. Together, they define the game area.
+// - ebitengine rescales the entire game area to fit the window size on the OS.
+//
+// This means the size of all elements is decided relative to the size of the
+// brick which is decided by the World.
+//
+// The World expects input in its own coordinate system. Even if the UI uses the
+// World coordinates without rescaling, it must account for any margins that it
+// adds to the play area that the World is aware of.
+//
+// Reasoning
+// ---------
+//
+// A game usually has a coordinate system for the World and a coordinate system
+// for the user interface. And usually a unit in the game world (e.g. a meter)
+// is different from a unit on the screen (a pixel). This is unavoidable in 3D
+// games where coordinates in the game world are 3D and the coordinates on the
+// screen are 2D.
+//
+// For a simple 2D game like this, I found it easier to reason about everything
+// in pixels. First of all, I want to use integers for coordinates and
+// algorithms anyway, to have perfect determinism. Then, the logic is simple
+// enough and the world is small enough that all the physics algorithms can be
+// pixel based. For example when bricks move I think of them as moving pixel by
+// pixel, not in an abstract continuous space.
+//
+// When you decide the sizes of various visual elements, you have to always
+// remember what coordinate system you are in. Also, the absolute sizes are not
+// very important since everything gets rescaled by ebitengine in the end. What
+// matters is the size of one element relative to the size of another. I found
+// it easiest to fix the size of the brick in pixels and build everything on top
+// of that.
+
+const NCols = int64(6)
+const NRows = int64(8)
+const BrickPixelSize = int64(140)
+const BrickMarginPixelSize = int64(30)
+const PlayAreaWidth = NCols*BrickPixelSize + (NCols-1)*BrickMarginPixelSize
+const PlayAreaHeight = NRows*BrickPixelSize + (NRows-1)*BrickMarginPixelSize
+
 // World rules (physics)
 // ---------------------
 //
@@ -188,7 +243,7 @@ type Brick struct {
 
 func NewCanonicalBrick(canPos Pt, val int64, w *World) Brick {
 	// Ensure the canonical position is valid.
-	Assert(canPos.X >= 0 && canPos.X < w.NCols && canPos.Y >= -1 && canPos.Y < w.NRows)
+	Assert(canPos.X >= 0 && canPos.X < NCols && canPos.Y >= -1 && canPos.Y < NRows)
 	b := Brick{
 		Val:   val,
 		State: Canonical,
@@ -203,9 +258,9 @@ func (b *Brick) SetPixelPos(newPos Pt, w *World) {
 	b.CanonicalPos = w.PixelPosToCanonicalPos(b.PixelPos)
 	b.CanonicalPixelPos = w.CanonicalPosToPixelPos(b.CanonicalPos)
 	// Ensure the new position is valid.
-	Assert(b.PixelPos.X >= 0 && b.PixelPos.X < playWidth)
+	Assert(b.PixelPos.X >= 0 && b.PixelPos.X < PlayAreaWidth)
 	// Ensure the canonical position is valid.
-	Assert(b.CanonicalPos.X >= 0 && b.CanonicalPos.X < w.NCols && b.CanonicalPos.Y >= -1 && b.CanonicalPos.Y <= w.NRows)
+	Assert(b.CanonicalPos.X >= 0 && b.CanonicalPos.X < NCols && b.CanonicalPos.Y >= -1 && b.CanonicalPos.Y <= NRows)
 }
 
 type WorldState int64
@@ -220,10 +275,6 @@ const (
 type World struct {
 	Rand
 	Seed                     int64
-	NCols                    int64
-	NRows                    int64
-	BrickPixelSize           int64
-	MarginPixelSize          int64
 	DragSpeed                int64
 	CanonicalAdjustmentSpeed int64
 	BrickFallAcceleration    int64
@@ -262,23 +313,19 @@ func (p *PlayerInput) EventOccurred() bool {
 
 func NewWorld(seed int64, l Level) (w World) {
 	// Set constants and buffers.
-	w.NCols = 6
-	w.NRows = 8
 	w.MaxBrickValue = 30
 	w.MaxInitialBrickValue = 5
-	w.MarginPixelSize = 30
-	w.BrickPixelSize = (playWidth - (w.MarginPixelSize * (w.NCols + 1))) / w.NCols
 	w.DragSpeed = 100
 	w.CanonicalAdjustmentSpeed = 21
 	w.BrickFallAcceleration = 2
 	w.ComingUpDeceleration = 2
 	w.RegularCooldown = 738
-	w.ObstaclesBuffer = make([]Rectangle, w.NCols*w.NRows+4)
-	w.ColumnsBuffer = make([][]*Brick, w.NCols)
+	w.ObstaclesBuffer = make([]Rectangle, NCols*NRows+4)
+	w.ColumnsBuffer = make([][]*Brick, NCols)
 	for i := range w.ColumnsBuffer {
-		w.ColumnsBuffer[i] = make([]*Brick, w.NRows)
+		w.ColumnsBuffer[i] = make([]*Brick, NRows)
 	}
-	w.CanPosBuffer = make([]Pt, w.NCols*w.NRows)
+	w.CanPosBuffer = make([]Pt, NCols*NRows)
 
 	// Transform Level parameters into the World's initial state.
 	w.Seed = seed
@@ -688,7 +735,7 @@ func (w *World) MergeBricks() {
 func (w *World) FindMergingBricks() (foundMerge bool, i, j int) {
 	// Two bricks merge if they are close enough for each other.
 	// We decide here what "close enough" means.
-	mergeDist := Sqr(w.BrickPixelSize / 3)
+	mergeDist := Sqr(BrickPixelSize / 3)
 	for i = range w.Bricks {
 		for j = i + 1; j < len(w.Bricks); j++ {
 			if w.Bricks[i].Val != w.Bricks[j].Val {
@@ -708,7 +755,7 @@ func (w *World) CreateFirstRowsOfBricks() {
 	w.Bricks = w.Bricks[:0]
 
 	// Create the first row.
-	for x := range w.NCols {
+	for x := range NCols {
 		val := w.RInt(1, w.MaxInitialBrickValue-1)
 		w.Bricks = append(w.Bricks, NewCanonicalBrick(Pt{x, 0}, val, w))
 	}
@@ -732,7 +779,7 @@ func (w *World) CurrentMaxVal() int64 {
 }
 
 func (w *World) CreateNewRowOfBricks(maxVal int64) {
-	for x := range w.NCols {
+	for x := range NCols {
 		// Get a value that is different from the value of the brick right
 		// above (if there is a brick right above).
 		newPos := Pt{x, -1}
@@ -765,7 +812,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 		// In order to do this, reverse the problem: if we start with speed 0
 		// and keep increasing the speed, what speed to we reach by the time we
 		// cover the distance?
-		totalDist := w.BrickPixelSize + w.MarginPixelSize
+		totalDist := int64(BrickPixelSize + BrickMarginPixelSize)
 		distSoFar := int64(0)
 		speed := int64(0)
 		acc := w.ComingUpDeceleration
@@ -779,7 +826,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 		// We set this starting speed. We know that we will travel the total
 		// distance when we reach speed 0 or right before.
 		w.ComingUpSpeed = speed
-		w.ComingUpDistanceLeft = w.BrickPixelSize + w.MarginPixelSize
+		w.ComingUpDistanceLeft = BrickPixelSize + BrickMarginPixelSize
 		if w.FirstComingUp {
 			w.FirstComingUp = false
 		} else {
@@ -805,8 +852,8 @@ func (w *World) StepComingUp(justEnteredState bool) {
 		// Check if bricks went over the top.
 		for i := range w.Bricks {
 			b := &w.Bricks[i]
-			bottom := playHeight - w.MarginPixelSize
-			top := bottom - w.BrickPixelSize*w.NRows - w.MarginPixelSize*(w.NRows-1)
+			bottom := int64(PlayAreaHeight - BrickMarginPixelSize)
+			top := bottom - BrickPixelSize*NRows - BrickMarginPixelSize*(NRows-1)
 			brickTop := w.Bricks[i].Bounds.Min.Y
 
 			if brickTop >= top {
@@ -835,23 +882,18 @@ func (w *World) StepComingUp(justEnteredState bool) {
 	}
 }
 
-func (w *World) PixelSize() (sz Pt) {
-	sz.X = w.NCols*w.BrickPixelSize + (w.NCols+1)*w.MarginPixelSize
-	sz.Y = w.NRows*w.BrickPixelSize + (w.NRows+1)*w.MarginPixelSize
-	return
-}
-
 func (w *World) PixelPosToCanonicalPos(pixelPos Pt) (canPos Pt) {
-	l := float64(w.BrickPixelSize + w.MarginPixelSize)
-	canPos.X = int64(math.Round(float64(pixelPos.X-w.MarginPixelSize) / l))
-	canPos.Y = int64(math.Round(float64(playHeight-pixelPos.Y)/l - 1))
+	l := float64(BrickPixelSize + BrickMarginPixelSize)
+	canPos.X = int64(math.Round(float64(pixelPos.X) / l))
+	canPos.Y = int64(math.Round(
+		float64(PlayAreaHeight-pixelPos.Y+BrickMarginPixelSize)/l - 1))
 	return
 }
 
 func (w *World) CanonicalPosToPixelPos(canPos Pt) (pixelPos Pt) {
-	l := w.BrickPixelSize + w.MarginPixelSize
-	pixelPos.X = canPos.X*l + w.MarginPixelSize
-	pixelPos.Y = playHeight - (canPos.Y+1)*l
+	l := BrickPixelSize + BrickMarginPixelSize
+	pixelPos.X = canPos.X * l
+	pixelPos.Y = PlayAreaHeight - (canPos.Y+1)*l + BrickMarginPixelSize
 	return
 }
 
@@ -863,7 +905,7 @@ func (w *World) PixelPosToCanonicalPixelPos(pixelPos Pt) (canPixelPos Pt) {
 
 func (w *World) BrickBounds(posPixels Pt) Rectangle {
 	return NewRectangle(posPixels,
-		posPixels.Plus(Pt{w.BrickPixelSize, w.BrickPixelSize}))
+		posPixels.Plus(Pt{BrickPixelSize, BrickPixelSize}))
 }
 
 type GetObstaclesOption int64
@@ -891,10 +933,10 @@ func (w *World) GetObstacles(b *Brick,
 		obstacles = append(obstacles, w.Bricks[j].Bounds)
 	}
 
-	bottom := playHeight - w.MarginPixelSize
-	top := bottom - w.BrickPixelSize*w.NRows - w.MarginPixelSize*(w.NRows-1)
-	left := w.MarginPixelSize
-	right := playWidth - w.MarginPixelSize
+	bottom := PlayAreaHeight
+	top := bottom - PlayAreaHeight
+	left := int64(0)
+	right := PlayAreaWidth
 
 	bottomRect := NewRectangle(Pt{left, bottom}, Pt{right, bottom + 100})
 	topRect := NewRectangle(Pt{left, top - 100}, Pt{right, top})

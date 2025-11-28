@@ -32,7 +32,7 @@ func (g *Gui) UpdateGameOngoing() {
 	var input PlayerInput
 	x, y := ebiten.CursorPosition()
 	input.Pos = Pt{int64(x), int64(y)}
-	input.Pos = g.screenToPlayCoord(input.Pos)
+	input.Pos = g.screenToPlayArea(input.Pos)
 	input.JustPressed = inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft)
 	input.JustReleased = inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft)
 	justPressedKeys := inpututil.AppendJustPressedKeys(nil)
@@ -77,7 +77,7 @@ func (g *Gui) UpdateGameOngoing() {
 			// IMPORTANT: save the playthrough before stepping the World. If
 			// a bug in the World causes it to crash, we want to save the input
 			// that caused the bug before the program crashes.
-			WriteFile(g.recordingFile, g.playthrough.Serialize())
+			// WriteFile(g.recordingFile, g.playthrough.Serialize())
 		}
 
 		// Step the world.

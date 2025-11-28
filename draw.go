@@ -8,10 +8,32 @@ import (
 	"image/color"
 )
 
+// Visual areas
+// ------------
+//
+// - The play area: the space the World is aware of.
+// - The frame: surrounds the play region.
+// - The timer: above the frame.
+// - The top bar: above the timer. Contains the menu button and the score.
+// - The game area: contains all of the above. Has a fixed size, known at
+// compile time.
+// - The screen: contains the game area and any margins necessary to fill in
+// the application window on the OS. Its size is known only at run time.
+
+const TopbarHeight = int64(200)
+const TimerHeight = int64(200)
+const FrameToPlayAreaMargin = int64(30)
+const FrameWidth = PlayAreaWidth + 2*FrameToPlayAreaMargin
+const FrameHeight = PlayAreaHeight + 2*FrameToPlayAreaMargin
+const GameToFrameMarginX = int64(30)
+const GameToFrameMarginY = int64(40)
+const GameWidth = FrameWidth + 2*GameToFrameMarginX
+const GameHeight = TopbarHeight + TimerHeight + FrameHeight + GameToFrameMarginY
+
 func (g *Gui) Draw(screen *ebiten.Image) {
-	// The screen bitmap has the aspect ratio of the game window. We fill it
-	// with some background. Then, we decide on a play region inside of screen,
-	// on which we draw all the actually interesting elements of our game.
+	// The screen bitmap has the aspect ratio of the application window. We fill
+	// it with some background. Then, we select the area inside of screen on
+	// which we draw all the actually interesting elements of our game.
 	screen.Fill(color.NRGBA{
 		R: 180,
 		G: 180,
@@ -19,50 +41,106 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 		A: 255,
 	})
 
-	marginX := (int64(screen.Bounds().Size().X) - g.adjustedPlayWidth) / 2
-	marginY := (int64(screen.Bounds().Size().Y) - g.adjustedPlayHeight) / 2
+	marginX := (int64(screen.Bounds().Size().X) - g.adjustedGameWidth) / 2
+	marginY := (int64(screen.Bounds().Size().Y) - g.adjustedGameHeight) / 2
 
-	play := SubImage(screen, image.Rect(
+	game := SubImage(screen, image.Rect(
 		int(marginX),
 		int(marginY),
-		int(marginX+playWidth),
-		int(marginY+playHeight)))
-	g.DrawPlayRegion(play)
+		int(marginX+GameWidth),
+		int(marginY+GameHeight)))
+	g.DrawGameArea(game)
 
 	debugHorizontal := SubImage(screen, image.Rect(
 		int(marginX),
-		int(marginY+playHeight),
-		int(marginX+g.adjustedPlayWidth),
-		int(marginY+g.adjustedPlayHeight)))
+		int(marginY+GameHeight),
+		int(marginX+g.adjustedGameWidth),
+		int(marginY+g.adjustedGameHeight)))
 	g.DrawDebugControlsHorizontal(debugHorizontal)
 
 	debugVertical := SubImage(screen, image.Rect(
-		int(marginX+playWidth),
+		int(marginX+GameWidth),
 		int(marginY),
-		int(marginX+g.adjustedPlayWidth),
-		int(marginY+playHeight)))
+		int(marginX+g.adjustedGameWidth),
+		int(marginY+GameHeight)))
 	g.DrawDebugControlsVertical(debugVertical)
 
 	// dx, dy := ebiten.Wheel()
 	// ebitenutil.DebugPrint(screen, fmt.Sprintf("dx: %f dy: %f", dx, dy))
 }
 
-func (g *Gui) DrawPlayRegion(screen *ebiten.Image) {
-	// Highlight the play region for dev purposes.
-	screen.Fill(color.NRGBA{
+func (g *Gui) DrawGameArea(game *ebiten.Image) {
+	// Highlight the game area for dev purposes.
+	game.Fill(color.NRGBA{
 		R: 230,
 		G: 237,
 		B: 240,
 		A: 255,
 	})
 
+	topBar := SubImage(game, image.Rect(
+		0,
+		0,
+		int(GameWidth),
+		int(TopbarHeight)))
+
+	timer := SubImage(game, image.Rect(
+		0,
+		int(TopbarHeight),
+		int(GameWidth),
+		int(TopbarHeight+TimerHeight)))
+
+	frame := SubImage(game, image.Rect(
+		int(GameToFrameMarginX),
+		int(TopbarHeight+TimerHeight),
+		int(GameWidth-GameToFrameMarginX),
+		int(GameHeight-GameToFrameMarginY)))
+
+	playArea := SubImage(game, image.Rect(
+		int(GameToFrameMarginX+FrameToPlayAreaMargin),
+		int(TopbarHeight+TimerHeight+FrameToPlayAreaMargin),
+		int(GameWidth-GameToFrameMarginX-FrameToPlayAreaMargin),
+		int(GameHeight-GameToFrameMarginY-FrameToPlayAreaMargin)))
+
+	// Draw topbar.
+	topBar.Fill(color.NRGBA{
+		R: 0,
+		G: 200,
+		B: 0,
+		A: 255,
+	})
+
+	// Draw timer.
+	timer.Fill(color.NRGBA{
+		R: 100,
+		G: 100,
+		B: 150,
+		A: 255,
+	})
+
+	// Draw frame.
+	frame.Fill(color.NRGBA{
+		R: 200,
+		G: 200,
+		B: 0,
+		A: 255,
+	})
+
+	// Draw play area.
+	playArea.Fill(color.NRGBA{
+		R: 0,
+		G: 200,
+		B: 200,
+		A: 255,
+	})
+
 	// Draw empty spaces.
-	for y := int64(0); y < g.world.NRows; y++ {
-		for x := int64(0); x < g.world.NCols; x++ {
+	for y := int64(0); y < NRows; y++ {
+		for x := int64(0); x < NCols; x++ {
 			pos := g.world.CanonicalPosToPixelPos(Pt{x, y})
-			DrawSprite(screen, g.imgBlank, float64(pos.X), float64(pos.Y),
-				float64(g.world.BrickPixelSize),
-				float64(g.world.BrickPixelSize))
+			DrawSprite(playArea, g.imgBlank, float64(pos.X), float64(pos.Y),
+				float64(BrickPixelSize),
+				float64(BrickPixelSize))
 		}
 	}
 
@@ -77,12 +155,13 @@ func (g *Gui) DrawPlayRegion(screen *ebiten.Image) {
 	// is moving around with more hesitation than the falling brick. I am not
 	// sure if that makes sense, but between the dragged and the falling brick
 	// I just chose for the falling brick to be the dominating one.
-	g.DrawBricks(screen, Canonical)
-	g.DrawBricks(screen, Dragged)
-	g.DrawBricks(screen, Falling)
+	g.DrawBricks(playArea, Canonical)
+	g.DrawBricks(playArea, Dragged)
+	g.DrawBricks(playArea, Falling)
 
+	// Draw debugging info.
 	for _, pt := range g.world.DebugPts {
-		DrawPixel(screen, pt, color.NRGBA{
+		DrawPixel(game, pt, color.NRGBA{
 			R: 255,
 			G: 0,
 			B: 0,
@@ -90,7 +169,7 @@ func (g *Gui) DrawPlayRegion(screen *ebiten.Image) {
 		})
 	}
 
-	// g.drawText(screen, fmt.Sprintf("ActualTPS: %f", ebiten.ActualTPS()), false,
+	// g.drawText(game, fmt.Sprintf("ActualTPS: %f", ebiten.ActualTPS()), false,
 	// 	false,
 	// 	color.NRGBA{
 	// 		R: 0,
@@ -100,7 +179,7 @@ func (g *Gui) DrawPlayRegion(screen *ebiten.Image) {
 	// 	})
 
 	if g.state == Playback {
-		DrawSprite(screen, g.imgCursor,
+		DrawSprite(game, g.imgCursor,
 			float64(g.mousePt.X),
 			float64(g.mousePt.Y),
 			50.0, 50.0)
@@ -165,8 +244,8 @@ func (g *Gui) DrawBricks(play *ebiten.Image, s BrickState) {
 		pos := b.PixelPos
 		img := g.imgBrick[b.Val]
 		DrawSprite(play, img, float64(pos.X), float64(pos.Y),
-			float64(g.world.BrickPixelSize),
-			float64(g.world.BrickPixelSize))
+			float64(BrickPixelSize),
+			float64(BrickPixelSize))
 
 		// Have a visual marker if the brick is marked as falling.
 		// if b.Falling {
@@ -227,7 +306,7 @@ func (g *Gui) drawText(screen *ebiten.Image, message string, centerX bool, cente
 }
 
 func (g *Gui) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	// I receive the game window's actual width and height, via
+	// I receive the application window's actual width and height, via
 	// outsideWidth, outsideHeight. I have to return the size I want, in pixels,
 	// for the bitmap that will be drawn in the window.
 	//
@@ -245,33 +324,34 @@ func (g *Gui) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight
 	// What I want (for this game):
 	// - Cover the entire window with some background, even if the
 	// interesting parts are only in some area in the center.
-	// - Have a "play region" that I can reason about easily, no matter the
+	// - Have a "game area" that I can reason about easily, no matter the
 	// aspect ratio or the resolution of the user's screen.
-	// - Have a "play region" that makes sense for a vertical smartphone. So,
+	// - Have a "game area" that makes sense for a vertical smartphone. So,
 	// taller than wider. But don't worry too much about matching the exact
 	// aspect ratio of a particular smartphone model.
-	// - Have a "play region" with enough pixels that most of the time
+	// - Have a "game area" with enough pixels that most of the time
 	// ebitengine will have to shrink the image, not enlarge it.
 	//
 	// Solution:
-	// - Have a fixed "play region", for example 1200 x 2000 pixels.
+	// - Have a fixed "game area". The actual value is computed from constants,
+	// but let's say it is 1200 x 2000 pixels in the end.
 	// - Compute screenWidth and screenHeight so that the aspect ratio of the
 	// screen bitmap is the same as the aspect ratio of the game window. This
 	// means screenWidth / screenHeight = outsideWidth / outsideHeight.
-	// - Compute screenWidth and screenHeight such that the play region is as
+	// - Compute screenWidth and screenHeight such that the game area is as
 	// large as it can be, but still fit inside the screen. This means either
 	// screenWidth = 1200 or screenHeight = 2000.
 	//
 	// Extra complication:
 	// - For debug purposes I find it very useful to have extra space to place
 	// controls.
-	// - The mechanism above guarantees a region of playWidth x playHeight.
+	// - The mechanism above guarantees a region of GameWidth x GameHeight.
 	// - The easiest way to add space for my controls is to add margins to
-	// playWidth and playHeight.
-	// - Simply use g.adjustedPlayWith and g.adjustedPlayHeight.
+	// GameWidth and GameHeight.
+	// - Simply use g.adjustedGameWidth and g.adjustedGameHeight.
 
-	// Find out if we need to match the screen width to the play width or the
-	// screen height to the play height.
+	// Find out if we need to match the screen width to the game width or the
+	// screen height to the game height.
 	// The aspect ratio of a rectangle is width / height. As an aspect ratio
 	// goes down to 0, the rectangle gets progressively thinner/taller.
 	// aspectRatio(rectangleA) < aspectRatio(rectangleB) means that rectangleA
@@ -281,16 +361,16 @@ func (g *Gui) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight
 	// space left at the top and the bottom.
 	// So, if aspectRatio(rectangleA) < aspectRatio(rectangleB), I will have
 	// rectangleA.width == rectangleB.width.
-	// I want play to fit inside screen, so screen is A and play is B.
+	// I want game to fit inside screen, so screen is A and game is B.
 	outsideAspectRatio := float64(outsideWidth) / float64(outsideHeight)
 	screenAspectRatio := outsideAspectRatio
-	playAspectRatio := float64(g.adjustedPlayWidth) / float64(g.adjustedPlayHeight)
-	if screenAspectRatio < playAspectRatio {
-		screenWidth = int(g.adjustedPlayWidth)
+	gameAspectRatio := float64(g.adjustedGameWidth) / float64(g.adjustedGameHeight)
+	if screenAspectRatio < gameAspectRatio {
+		screenWidth = int(g.adjustedGameWidth)
 		// screenAspectRatio = screenWidth / screenHeight, which means:
 		screenHeight = int(float64(screenWidth) / screenAspectRatio)
 	} else {
-		screenHeight = int(g.adjustedPlayHeight)
+		screenHeight = int(g.adjustedGameHeight)
 		// screenAspectRatio = screenWidth / screenHeight, which means:
 		screenWidth = int(float64(screenHeight) * screenAspectRatio)
 	}
@@ -304,12 +384,7 @@ func (g *Gui) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight
 }
 
 func (g *Gui) getWindowSize() Pt {
-	playSize := Pt{g.world.NRows, g.world.NCols}.Times(g.world.BrickPixelSize + g.world.MarginPixelSize)
-	windowSize := playSize
-	windowSize.X += 20
-	windowSize.Y += 20
-
-	return windowSize
+	return Pt{}
 }
 
 func (g *Gui) loadGuiData() {
@@ -359,18 +434,20 @@ func (g *Gui) updateWindowSize() {
 	ebiten.SetWindowTitle("Clone1")
 }
 
-func (g *Gui) screenToPlayCoord(pt Pt) Pt {
-	marginX := (g.screenWidth - g.adjustedPlayWidth) / 2
-	marginY := (g.screenHeight - g.adjustedPlayHeight) / 2
-	pt.X -= marginX
-	pt.Y -= marginY
-	return pt
+func (g *Gui) screenToPlayArea(pt Pt) Pt {
+	var playAreaOrigin Pt
+	playAreaOrigin.X = (g.screenWidth-g.adjustedGameWidth)/2 +
+		GameToFrameMarginX + FrameToPlayAreaMargin
+	playAreaOrigin.Y = (g.screenHeight-g.adjustedGameHeight)/2 +
+		TopbarHeight + TimerHeight + FrameToPlayAreaMargin
+	return pt.Minus(playAreaOrigin)
 }
 
-func (g *Gui) playToScreenCoord(pt Pt) Pt {
-	marginX := (g.screenWidth - g.adjustedPlayWidth) / 2
-	marginY := (g.screenHeight - g.adjustedPlayHeight) / 2
-	pt.X += marginX
-	pt.Y += marginY
-	return pt
+func (g *Gui) playAreaToScreen(pt Pt) Pt {
+	var playAreaOrigin Pt
+	playAreaOrigin.X = (g.screenWidth-g.adjustedGameWidth)/2 +
+		GameToFrameMarginX + FrameToPlayAreaMargin
+	playAreaOrigin.Y = (g.screenHeight-g.adjustedGameHeight)/2 +
+		TopbarHeight + TimerHeight + FrameToPlayAreaMargin
+	return pt.Plus(playAreaOrigin)
 }

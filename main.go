@@ -47,11 +47,6 @@ const ReleaseVersion = 999
 //go:embed data/*
 var embeddedFiles embed.FS
 
-const (
-	playWidth  = int64(1200)
-	playHeight = int64(2000)
-)
-
 type GameState int64
 
 const (
@@ -94,8 +89,8 @@ type Gui struct {
 	FrameSkipAltArrow   int64
 	FrameSkipShiftArrow int64
 	FrameSkipArrow      int64
-	adjustedPlayWidth   int64
-	adjustedPlayHeight  int64
+	adjustedGameWidth   int64
+	adjustedGameHeight  int64
 	slowdownFactor      int64       // 1 - does nothing, 2 - game is twice as slow etc
 	accumulatedInput    PlayerInput // only relevant for slowdownFactor > 1, see
 	// the implementation for a more detailed explanation
@@ -112,8 +107,8 @@ func main() {
 	g.debugMarginWidth = 0
 	g.debugMarginHeight = 100
 	g.recordingFile = "last-recording.clone1"
-	g.adjustedPlayWidth = playWidth
-	g.adjustedPlayHeight = playHeight
+	g.adjustedGameWidth = GameWidth
+	g.adjustedGameHeight = GameHeight
 	g.FrameSkipAltArrow = 1
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
@@ -128,8 +123,8 @@ func main() {
 
 	if g.state == Playback || g.state == DebugCrash {
 		g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))
-		g.adjustedPlayWidth += g.debugMarginWidth
-		g.adjustedPlayHeight += g.debugMarginHeight
+		g.adjustedGameWidth += g.debugMarginWidth
+		g.adjustedGameHeight += g.debugMarginHeight
 	}
 
 	if g.state == DebugCrash {
