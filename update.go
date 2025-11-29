@@ -24,6 +24,10 @@ func (g *Gui) Update() error {
 		g.UpdateHomeScreen()
 	case GamePaused:
 		g.UpdateGamePaused()
+	case GameOver:
+		g.UpdateGameOver()
+	case GameWon:
+		g.UpdateGameWon()
 	default:
 		panic("unhandled default case")
 	}
@@ -95,6 +99,13 @@ func (g *Gui) UpdateGameOngoing() {
 
 	// Finally increase the frame.
 	g.frameIdx++
+
+	if g.world.State == Lost {
+		g.state = GameOver
+	}
+	if g.world.State == Won {
+		g.state = GameWon
+	}
 }
 
 func (g *Gui) Pressed(key ebiten.Key) bool {
@@ -269,4 +280,17 @@ func (g *Gui) UpdateGamePaused() {
 	if g.JustClicked(g.buttonHome) {
 		g.state = HomeScreen
 	}
+}
+
+func (g *Gui) UpdateGameOver() {
+	if g.JustClicked(g.buttonRestart) {
+		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.state = GameOngoing
+	}
+	if g.JustClicked(g.buttonHome) {
+		g.state = HomeScreen
+	}
+}
+
+func (g *Gui) UpdateGameWon() {
 }

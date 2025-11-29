@@ -53,7 +53,7 @@ const (
 	GameOngoing GameState = iota
 	GamePaused
 	GameWon
-	GameLost
+	GameOver
 	Playback
 	DebugCrash
 	HomeScreen
@@ -75,8 +75,9 @@ type Gui struct {
 	imgTimer            *ebiten.Image
 	imgTopbar           *ebiten.Image
 	imgScreenHome       *ebiten.Image
-	imgButtonPlay       *ebiten.Image
 	imgScreenPaused     *ebiten.Image
+	imgScreenGameOver   *ebiten.Image
+	imgButtonPlay       *ebiten.Image
 	imgButtonRestart    *ebiten.Image
 	imgButtonHome       *ebiten.Image
 	folderWatcher1      FolderWatcher

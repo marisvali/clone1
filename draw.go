@@ -43,6 +43,12 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 	case GamePaused:
 		g.DrawGameOngoing(screen)
 		g.DrawGamePaused(screen)
+	case GameOver:
+		g.DrawGameOngoing(screen)
+		g.DrawGameOver(screen)
+	case GameWon:
+		g.DrawGameOngoing(screen)
+		g.DrawGameWon(screen)
 	default:
 		panic("unhandled default case")
 	}
@@ -85,6 +91,30 @@ func (g *Gui) DrawGamePaused(screen *ebiten.Image) {
 		1290+145))
 	DrawSpriteStretched(img, g.imgButtonHome)
 	g.buttonHome = img.Bounds()
+}
+
+func (g *Gui) DrawGameOver(screen *ebiten.Image) {
+	DrawSpriteStretched(screen, g.imgScreenGameOver)
+
+	img := SubImage(screen, image.Rect(
+		320,
+		1220,
+		320+145,
+		1220+145))
+	DrawSpriteStretched(img, g.imgButtonRestart)
+	g.buttonRestart = img.Bounds()
+
+	img = SubImage(screen, image.Rect(
+		320,
+		1415,
+		320+145,
+		1415+145))
+	DrawSpriteStretched(img, g.imgButtonHome)
+	g.buttonHome = img.Bounds()
+}
+
+func (g *Gui) DrawGameWon(screen *ebiten.Image) {
+
 }
 
 func (g *Gui) DrawGameOngoing(screen *ebiten.Image) {
@@ -464,6 +494,7 @@ func (g *Gui) loadGuiData() {
 		g.imgTopbar = LoadImage(g.FSys, "data/gui/topbar.png")
 		g.imgScreenHome = LoadImage(g.FSys, "data/gui/screen-home.png")
 		g.imgScreenPaused = LoadImage(g.FSys, "data/gui/screen-paused.png")
+		g.imgScreenGameOver = LoadImage(g.FSys, "data/gui/screen-game-over.png")
 		g.imgButtonPlay = LoadImage(g.FSys, "data/gui/button-play.png")
 		g.imgButtonRestart = LoadImage(g.FSys, "data/gui/button-restart.png")
 		g.imgButtonHome = LoadImage(g.FSys, "data/gui/button-home.png")
