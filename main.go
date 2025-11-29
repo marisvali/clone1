@@ -74,8 +74,11 @@ type Gui struct {
 	imgFrame            *ebiten.Image
 	imgTimer            *ebiten.Image
 	imgTopbar           *ebiten.Image
-	imgHomeScreen       *ebiten.Image
+	imgScreenHome       *ebiten.Image
 	imgButtonPlay       *ebiten.Image
+	imgScreenPaused     *ebiten.Image
+	imgButtonRestart    *ebiten.Image
+	imgButtonHome       *ebiten.Image
 	folderWatcher1      FolderWatcher
 	defaultFont         font.Face
 	screenWidth         int64
@@ -91,6 +94,9 @@ type Gui struct {
 	buttonPlaybackPlay  image.Rectangle
 	buttonPlaybackBar   image.Rectangle
 	buttonPlay          image.Rectangle
+	buttonContinue      image.Rectangle
+	buttonRestart       image.Rectangle
+	buttonHome          image.Rectangle
 	pressedKeys         []ebiten.Key
 	justPressedKeys     []ebiten.Key // keys pressed in this frame
 	FrameSkipAltArrow   int64

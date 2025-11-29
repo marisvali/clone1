@@ -22,6 +22,8 @@ func (g *Gui) Update() error {
 		g.UpdateDebugCrash()
 	case HomeScreen:
 		g.UpdateHomeScreen()
+	case GamePaused:
+		g.UpdateGamePaused()
 	default:
 		panic("unhandled default case")
 	}
@@ -38,6 +40,10 @@ func (g *Gui) UpdateGameOngoing() {
 	input.JustPressed = inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft)
 	input.JustReleased = inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft)
 	justPressedKeys := inpututil.AppendJustPressedKeys(nil)
+	if slices.Contains(justPressedKeys, ebiten.KeyEscape) {
+		g.state = GamePaused
+		return
+	}
 	if slices.Contains(justPressedKeys, ebiten.KeyR) {
 		input.ResetWorld = true
 	}
@@ -245,6 +251,22 @@ func (g *Gui) UpdateDebugCrash() {
 
 func (g *Gui) UpdateHomeScreen() {
 	if g.JustClicked(g.buttonPlay) {
+		g.world = NewWorldFromPlaythrough(g.playthrough)
 		g.state = GameOngoing
+	}
+}
+
+func (g *Gui) UpdateGamePaused() {
+	justPressedKeys := inpututil.AppendJustPressedKeys(nil)
+	if g.JustClicked(g.buttonContinue) ||
+		slices.Contains(justPressedKeys, ebiten.KeyEscape) {
+		g.state = GameOngoing
+	}
+	if g.JustClicked(g.buttonRestart) {
+		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.state = GameOngoing
+	}
+	if g.JustClicked(g.buttonHome) {
+		g.state = HomeScreen
 	}
 }
