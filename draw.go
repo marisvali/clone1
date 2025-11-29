@@ -31,6 +31,32 @@ const GameWidth = FrameWidth + 2*GameToFrameMarginX
 const GameHeight = TopbarHeight + TimerHeight + FrameHeight + GameToFrameMarginY
 
 func (g *Gui) Draw(screen *ebiten.Image) {
+	switch g.state {
+	case GameOngoing:
+		g.DrawGameOngoing(screen)
+	case Playback:
+		g.DrawGameOngoing(screen)
+	case DebugCrash:
+		g.DrawGameOngoing(screen)
+	case HomeScreen:
+		g.DrawHomeScreen(screen)
+	default:
+		panic("unhandled default case")
+	}
+}
+
+func (g *Gui) DrawHomeScreen(screen *ebiten.Image) {
+	DrawSpriteStretched(screen, g.imgHomeScreen)
+	playButtonImg := SubImage(screen, image.Rect(
+		490,
+		1400,
+		740,
+		1650))
+	DrawSpriteStretched(playButtonImg, g.imgButtonPlay)
+	g.buttonPlay = playButtonImg.Bounds()
+}
+
+func (g *Gui) DrawGameOngoing(screen *ebiten.Image) {
 	// The screen bitmap has the aspect ratio of the application window. We fill
 	// it with some background. Then, we select the area inside of screen on
 	// which we draw all the actually interesting elements of our game.
@@ -405,6 +431,8 @@ func (g *Gui) loadGuiData() {
 		g.imgFrame = LoadImage(g.FSys, "data/gui/frame.png")
 		g.imgTimer = LoadImage(g.FSys, "data/gui/timer.png")
 		g.imgTopbar = LoadImage(g.FSys, "data/gui/topbar.png")
+		g.imgHomeScreen = LoadImage(g.FSys, "data/gui/home.png")
+		g.imgButtonPlay = LoadImage(g.FSys, "data/gui/button-play.png")
 
 		if CheckFailed == nil {
 			break
@@ -416,7 +444,7 @@ func (g *Gui) loadGuiData() {
 }
 
 func (g *Gui) updateWindowSize() {
-	ebiten.SetWindowSize(int(g.adjustedGameWidth)/2, int(g.adjustedGameHeight)/2)
+	ebiten.SetWindowSize(int(g.adjustedGameWidth)/3, int(g.adjustedGameHeight)/3)
 	// width, height := ebiten.ScreenSizeInFullscreen()
 	// size := min(width, height) * 8 / 10
 	// ebiten.SetWindowSize(size, size)

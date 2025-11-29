@@ -56,6 +56,7 @@ const (
 	GameLost
 	Playback
 	DebugCrash
+	HomeScreen
 )
 
 type Gui struct {
@@ -73,6 +74,8 @@ type Gui struct {
 	imgFrame            *ebiten.Image
 	imgTimer            *ebiten.Image
 	imgTopbar           *ebiten.Image
+	imgHomeScreen       *ebiten.Image
+	imgButtonPlay       *ebiten.Image
 	folderWatcher1      FolderWatcher
 	defaultFont         font.Face
 	screenWidth         int64
@@ -87,6 +90,7 @@ type Gui struct {
 	playbackPaused      bool
 	buttonPlaybackPlay  image.Rectangle
 	buttonPlaybackBar   image.Rectangle
+	buttonPlay          image.Rectangle
 	pressedKeys         []ebiten.Key
 	justPressedKeys     []ebiten.Key // keys pressed in this frame
 	FrameSkipAltArrow   int64
@@ -118,6 +122,7 @@ func main() {
 	g.slowdownFactor = 1
 	g.state = GameOngoing
 	// g.state = DebugCrash
+	g.state = HomeScreen
 
 	if len(os.Args) == 2 {
 		g.recordingFile = os.Args[1]

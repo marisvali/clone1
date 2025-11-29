@@ -20,6 +20,8 @@ func (g *Gui) Update() error {
 		g.UpdatePlayback()
 	case DebugCrash:
 		g.UpdateDebugCrash()
+	case HomeScreen:
+		g.UpdateHomeScreen()
 	default:
 		panic("unhandled default case")
 	}
@@ -238,5 +240,11 @@ func (g *Gui) UpdateDebugCrash() {
 		for i := range g.frameIdx {
 			g.world.Step(g.playthrough.History[i])
 		}
+	}
+}
+
+func (g *Gui) UpdateHomeScreen() {
+	if g.JustClicked(g.buttonPlay) {
+		g.state = GameOngoing
 	}
 }
