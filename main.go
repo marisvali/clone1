@@ -70,6 +70,9 @@ type Gui struct {
 	imgPlaybackPause    *ebiten.Image
 	imgPlaybackPlay     *ebiten.Image
 	imgPlayBar          *ebiten.Image
+	imgFrame            *ebiten.Image
+	imgTimer            *ebiten.Image
+	imgTopbar           *ebiten.Image
 	folderWatcher1      FolderWatcher
 	defaultFont         font.Face
 	screenWidth         int64

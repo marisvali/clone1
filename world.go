@@ -832,6 +832,8 @@ func (w *World) StepComingUp(justEnteredState bool) {
 		} else {
 			w.CreateNewRowOfBricks(w.CurrentMaxVal() - 2)
 		}
+
+		w.RegularCooldownIdx = w.RegularCooldown
 	}
 
 	// In the last step, the speed might be higher than the distance left.
@@ -876,7 +878,6 @@ func (w *World) StepComingUp(justEnteredState bool) {
 				return
 			}
 		}
-		w.RegularCooldownIdx = w.RegularCooldown
 		w.State = Regular
 		return
 	}

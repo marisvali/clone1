@@ -20,9 +20,9 @@ import (
 // - The screen: contains the game area and any margins necessary to fill in
 // the application window on the OS. Its size is known only at run time.
 
-const TopbarHeight = int64(200)
-const TimerHeight = int64(200)
-const FrameToPlayAreaMargin = int64(30)
+const TopbarHeight = int64(280)
+const TimerHeight = int64(180)
+const FrameToPlayAreaMargin = int64(90)
 const FrameWidth = PlayAreaWidth + 2*FrameToPlayAreaMargin
 const FrameHeight = PlayAreaHeight + 2*FrameToPlayAreaMargin
 const GameToFrameMarginX = int64(30)
@@ -78,7 +78,7 @@ func (g *Gui) DrawGameArea(game *ebiten.Image) {
 		A: 255,
 	})
 
-	topBar := SubImage(game, image.Rect(
+	topbar := SubImage(game, image.Rect(
 		0,
 		0,
 		int(GameWidth),
@@ -103,37 +103,29 @@ func (g *Gui) DrawGameArea(game *ebiten.Image) {
 		int(GameHeight-GameToFrameMarginY-FrameToPlayAreaMargin)))
 
 	// Draw topbar.
-	topBar.Fill(color.NRGBA{
-		R: 0,
-		G: 200,
-		B: 0,
-		A: 255,
-	})
+	DrawSpriteStretched(topbar, g.imgTopbar)
 
 	// Draw timer.
-	timer.Fill(color.NRGBA{
-		R: 100,
-		G: 100,
-		B: 150,
+	// Draw timer bar going down.
+	totalWidth := int64(1130 - 160)
+	timeLeft := totalWidth * g.world.RegularCooldownIdx / g.world.RegularCooldown
+	timerBar := SubImage(timer, image.Rect(
+		160,
+		80,
+		160+int(timeLeft),
+		120))
+	timerBar.Fill(color.NRGBA{
+		R: 251,
+		G: 150,
+		B: 32,
 		A: 255,
 	})
+	DrawSpriteStretched(timer, g.imgTimer)
 
 	// Draw frame.
-	frame.Fill(color.NRGBA{
-		R: 200,
-		G: 200,
-		B: 0,
-		A: 255,
-	})
+	DrawSpriteStretched(frame, g.imgFrame)
 
 	// Draw play area.
-	playArea.Fill(color.NRGBA{
-		R: 0,
-		G: 200,
-		B: 200,
-		A: 255,
-	})
-
 	// Draw empty spaces.
 	for y := int64(0); y < NRows; y++ {
 		for x := int64(0); x < NCols; x++ {
@@ -383,10 +375,6 @@ func (g *Gui) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight
 	return
 }
 
-func (g *Gui) getWindowSize() Pt {
-	return Pt{}
-}
-
 func (g *Gui) loadGuiData() {
 	// Read from the disk over and over until a full read is possible.
 	// This repetition is meant to avoid crashes due to reading files
@@ -414,6 +402,9 @@ func (g *Gui) loadGuiData() {
 		g.imgPlaybackPause = LoadImage(g.FSys, "data/gui/playback-pause.png")
 		g.imgPlaybackPlay = LoadImage(g.FSys, "data/gui/playback-play.png")
 		g.imgPlayBar = LoadImage(g.FSys, "data/gui/playbar.png")
+		g.imgFrame = LoadImage(g.FSys, "data/gui/frame.png")
+		g.imgTimer = LoadImage(g.FSys, "data/gui/timer.png")
+		g.imgTopbar = LoadImage(g.FSys, "data/gui/topbar.png")
 
 		if CheckFailed == nil {
 			break
@@ -425,11 +416,11 @@ func (g *Gui) loadGuiData() {
 }
 
 func (g *Gui) updateWindowSize() {
-	// windowSize := g.getWindowSize()
-	// ebiten.SetWindowSize(windowSize.X.ToInt(), windowSize.Y.ToInt())
-	width, height := ebiten.ScreenSizeInFullscreen()
-	size := min(width, height) * 8 / 10
-	ebiten.SetWindowSize(size, size)
+	ebiten.SetWindowSize(int(g.adjustedGameWidth)/2, int(g.adjustedGameHeight)/2)
+	// width, height := ebiten.ScreenSizeInFullscreen()
+	// size := min(width, height) * 8 / 10
+	// ebiten.SetWindowSize(size, size)
+	// ebiten.SetWindowSize(460, 700)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	ebiten.SetWindowTitle("Clone1")
 }
