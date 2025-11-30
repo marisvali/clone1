@@ -75,8 +75,8 @@ const SimulationVersion = 999
 
 const NCols = int64(6)
 const NRows = int64(8)
-const BrickPixelSize = int64(140)
-const BrickMarginPixelSize = int64(30)
+const BrickPixelSize = int64(135)
+const BrickMarginPixelSize = int64(25)
 const PlayAreaWidth = NCols*BrickPixelSize + (NCols-1)*BrickMarginPixelSize
 const PlayAreaHeight = NRows*BrickPixelSize + (NRows-1)*BrickMarginPixelSize
 

@@ -31,93 +31,6 @@ const GameWidth = FrameWidth + 2*GameToFrameMarginX
 const GameHeight = TopbarHeight + TimerHeight + FrameHeight + GameToFrameMarginY
 
 func (g *Gui) Draw(screen *ebiten.Image) {
-	switch g.state {
-	case GameOngoing:
-		g.DrawGameOngoing(screen)
-	case Playback:
-		g.DrawGameOngoing(screen)
-	case DebugCrash:
-		g.DrawGameOngoing(screen)
-	case HomeScreen:
-		g.DrawHomeScreen(screen)
-	case GamePaused:
-		g.DrawGameOngoing(screen)
-		g.DrawGamePaused(screen)
-	case GameOver:
-		g.DrawGameOngoing(screen)
-		g.DrawGameOver(screen)
-	case GameWon:
-		g.DrawGameOngoing(screen)
-		g.DrawGameWon(screen)
-	default:
-		panic("unhandled default case")
-	}
-}
-
-func (g *Gui) DrawHomeScreen(screen *ebiten.Image) {
-	DrawSpriteStretched(screen, g.imgScreenHome)
-	playButtonImg := SubImage(screen, image.Rect(
-		490,
-		1400,
-		740,
-		1650))
-	DrawSpriteStretched(playButtonImg, g.imgButtonPlay)
-	g.buttonPlay = playButtonImg.Bounds()
-}
-
-func (g *Gui) DrawGamePaused(screen *ebiten.Image) {
-	DrawSpriteStretched(screen, g.imgScreenPaused)
-
-	img := SubImage(screen, image.Rect(
-		320,
-		910,
-		320+145,
-		910+145))
-	DrawSpriteStretched(img, g.imgButtonPlay)
-	g.buttonContinue = img.Bounds()
-
-	img = SubImage(screen, image.Rect(
-		320,
-		1100,
-		320+145,
-		1100+145))
-	DrawSpriteStretched(img, g.imgButtonRestart)
-	g.buttonRestart = img.Bounds()
-
-	img = SubImage(screen, image.Rect(
-		320,
-		1290,
-		320+145,
-		1290+145))
-	DrawSpriteStretched(img, g.imgButtonHome)
-	g.buttonHome = img.Bounds()
-}
-
-func (g *Gui) DrawGameOver(screen *ebiten.Image) {
-	DrawSpriteStretched(screen, g.imgScreenGameOver)
-
-	img := SubImage(screen, image.Rect(
-		320,
-		1220,
-		320+145,
-		1220+145))
-	DrawSpriteStretched(img, g.imgButtonRestart)
-	g.buttonRestart = img.Bounds()
-
-	img = SubImage(screen, image.Rect(
-		320,
-		1415,
-		320+145,
-		1415+145))
-	DrawSpriteStretched(img, g.imgButtonHome)
-	g.buttonHome = img.Bounds()
-}
-
-func (g *Gui) DrawGameWon(screen *ebiten.Image) {
-
-}
-
-func (g *Gui) DrawGameOngoing(screen *ebiten.Image) {
 	// The screen bitmap has the aspect ratio of the application window. We fill
 	// it with some background. Then, we select the area inside of screen on
 	// which we draw all the actually interesting elements of our game.
@@ -136,7 +49,28 @@ func (g *Gui) DrawGameOngoing(screen *ebiten.Image) {
 		int(marginY),
 		int(marginX+GameWidth),
 		int(marginY+GameHeight)))
-	g.DrawGameArea(game)
+
+	switch g.state {
+	case GameOngoing:
+		g.DrawGameOngoing(game)
+	case Playback:
+		g.DrawGameOngoing(game)
+	case DebugCrash:
+		g.DrawGameOngoing(game)
+	case HomeScreen:
+		g.DrawHomeScreen(game)
+	case GamePaused:
+		g.DrawGameOngoing(game)
+		g.DrawGamePaused(game)
+	case GameOver:
+		g.DrawGameOngoing(game)
+		g.DrawGameOver(game)
+	case GameWon:
+		g.DrawGameOngoing(game)
+		g.DrawGameWon(game)
+	default:
+		panic("unhandled default case")
+	}
 
 	debugHorizontal := SubImage(screen, image.Rect(
 		int(marginX),
@@ -151,9 +85,73 @@ func (g *Gui) DrawGameOngoing(screen *ebiten.Image) {
 		int(marginX+g.adjustedGameWidth),
 		int(marginY+GameHeight)))
 	g.DrawDebugControlsVertical(debugVertical)
+}
 
-	// dx, dy := ebiten.Wheel()
-	// ebitenutil.DebugPrint(screen, fmt.Sprintf("dx: %f dy: %f", dx, dy))
+func (g *Gui) DrawHomeScreen(screen *ebiten.Image) {
+	DrawSpriteStretched(screen, g.imgScreenHome)
+	playButtonImg := SubImage(screen, image.Rect(
+		470,
+		1345,
+		470+240,
+		1345+240))
+	DrawSpriteStretched(playButtonImg, g.imgButtonPlay)
+	g.buttonPlay = playButtonImg.Bounds()
+}
+
+func (g *Gui) DrawGamePaused(screen *ebiten.Image) {
+	DrawSpriteStretched(screen, g.imgScreenPaused)
+
+	img := SubImage(screen, image.Rect(
+		305,
+		875,
+		305+137,
+		875+137))
+	DrawSpriteStretched(img, g.imgButtonPlay)
+	g.buttonContinue = img.Bounds()
+
+	img = SubImage(screen, image.Rect(
+		305,
+		1057,
+		305+137,
+		1057+137))
+	DrawSpriteStretched(img, g.imgButtonRestart)
+	g.buttonRestart = img.Bounds()
+
+	img = SubImage(screen, image.Rect(
+		305,
+		1240,
+		305+137,
+		1240+137))
+	DrawSpriteStretched(img, g.imgButtonHome)
+	g.buttonHome = img.Bounds()
+}
+
+func (g *Gui) DrawGameOver(screen *ebiten.Image) {
+	DrawSpriteStretched(screen, g.imgScreenGameOver)
+
+	img := SubImage(screen, image.Rect(
+		305,
+		1175,
+		305+137,
+		1175+137))
+	DrawSpriteStretched(img, g.imgButtonRestart)
+	g.buttonRestart = img.Bounds()
+
+	img = SubImage(screen, image.Rect(
+		305,
+		1358,
+		305+137,
+		1358+137))
+	DrawSpriteStretched(img, g.imgButtonHome)
+	g.buttonHome = img.Bounds()
+}
+
+func (g *Gui) DrawGameWon(screen *ebiten.Image) {
+
+}
+
+func (g *Gui) DrawGameOngoing(screen *ebiten.Image) {
+	g.DrawGameArea(screen)
 }
 
 func (g *Gui) DrawGameArea(game *ebiten.Image) {
@@ -194,7 +192,7 @@ func (g *Gui) DrawGameArea(game *ebiten.Image) {
 
 	// Draw timer.
 	// Draw timer bar going down.
-	totalWidth := int64(1130 - 160)
+	totalWidth := int64(1075 - 160)
 	timeLeft := totalWidth * g.world.RegularCooldownIdx / g.world.RegularCooldown
 	timerBar := SubImage(timer, image.Rect(
 		160,
@@ -509,10 +507,10 @@ func (g *Gui) loadGuiData() {
 }
 
 func (g *Gui) updateWindowSize() {
-	ebiten.SetWindowSize(int(g.adjustedGameWidth)/3, int(g.adjustedGameHeight)/3)
-	// width, height := ebiten.ScreenSizeInFullscreen()
-	// size := min(width, height) * 8 / 10
-	// ebiten.SetWindowSize(size, size)
+	// ebiten.SetWindowSize(int(g.adjustedGameWidth)/3, int(g.adjustedGameHeight)/3)
+	width, height := ebiten.ScreenSizeInFullscreen()
+	size := min(width, height) * 8 / 10
+	ebiten.SetWindowSize(size, size)
 	// ebiten.SetWindowSize(460, 700)
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	ebiten.SetWindowTitle("Clone1")

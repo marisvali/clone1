@@ -38,11 +38,37 @@ func (g *Gui) Update() error {
 func (g *Gui) UpdateGameOngoing() {
 	// Get the player input.
 	var input PlayerInput
-	x, y := ebiten.CursorPosition()
-	input.Pos = Pt{int64(x), int64(y)}
+
+	input.JustPressed = false
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		input.JustPressed = true
+	}
+	touchIDs := inpututil.AppendJustPressedTouchIDs([]ebiten.TouchID{})
+	if len(touchIDs) > 0 {
+		input.JustPressed = true
+	}
+
+	input.JustReleased = false
+	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
+		input.JustReleased = true
+
+	}
+	touchIDs = inpututil.AppendJustReleasedTouchIDs([]ebiten.TouchID{})
+	if len(touchIDs) > 0 {
+		input.JustReleased = true
+	}
+
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+		x, y := ebiten.CursorPosition()
+		input.Pos = Pt{int64(x), int64(y)}
+	}
+	touchIDs = ebiten.AppendTouchIDs([]ebiten.TouchID{})
+	if len(touchIDs) > 0 {
+		x, y := ebiten.TouchPosition(touchIDs[0])
+		input.Pos = Pt{int64(x), int64(y)}
+	}
+
 	input.Pos = g.screenToPlayArea(input.Pos)
-	input.JustPressed = inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft)
-	input.JustReleased = inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft)
 	justPressedKeys := inpututil.AppendJustPressedKeys(nil)
 	if slices.Contains(justPressedKeys, ebiten.KeyEscape) {
 		g.state = GamePaused
@@ -121,19 +147,29 @@ func ImageRectContainsPt(r image.Rectangle, pt image.Point) bool {
 }
 
 func (g *Gui) JustClicked(button image.Rectangle) bool {
-	if !inpututil.IsMouseButtonJustPressed(ebiten.MouseButton0) {
-		return false
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButton0) {
+		x, y := ebiten.CursorPosition()
+		return ImageRectContainsPt(button, image.Pt(x, y))
 	}
-	x, y := ebiten.CursorPosition()
-	return ImageRectContainsPt(button, image.Pt(x, y))
+	touchIDs := inpututil.AppendJustPressedTouchIDs([]ebiten.TouchID{})
+	if len(touchIDs) != 0 {
+		x, y := ebiten.TouchPosition(touchIDs[0])
+		return ImageRectContainsPt(button, image.Pt(x, y))
+	}
+	return false
 }
 
 func (g *Gui) LeftClickPressedOn(button image.Rectangle) bool {
-	if !ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
-		return false
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
+		x, y := ebiten.CursorPosition()
+		return ImageRectContainsPt(button, image.Pt(x, y))
 	}
-	x, y := ebiten.CursorPosition()
-	return ImageRectContainsPt(button, image.Pt(x, y))
+	touchIDs := ebiten.AppendTouchIDs([]ebiten.TouchID{})
+	if len(touchIDs) != 0 {
+		x, y := ebiten.TouchPosition(touchIDs[0])
+		return ImageRectContainsPt(button, image.Pt(x, y))
+	}
+	return false
 }
 
 func (g *Gui) UpdatePlayback() {
