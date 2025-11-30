@@ -36,6 +36,11 @@ func (g *Gui) Update() error {
 }
 
 func (g *Gui) UpdateGameOngoing() {
+	if g.JustClicked(g.buttonMenu) {
+		g.state = GamePaused
+		return
+	}
+
 	// Get the player input.
 	var input PlayerInput
 

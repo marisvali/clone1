@@ -189,6 +189,13 @@ func (g *Gui) DrawGameArea(game *ebiten.Image) {
 
 	// Draw topbar.
 	DrawSpriteStretched(topbar, g.imgTopbar)
+	img := SubImage(topbar, image.Rect(
+		38,
+		75,
+		38+137,
+		75+137))
+	DrawSpriteStretched(img, g.imgButtonMenu)
+	g.buttonMenu = img.Bounds()
 
 	// Draw timer.
 	// Draw timer bar going down.
@@ -496,6 +503,7 @@ func (g *Gui) loadGuiData() {
 		g.imgButtonPlay = LoadImage(g.FSys, "data/gui/button-play.png")
 		g.imgButtonRestart = LoadImage(g.FSys, "data/gui/button-restart.png")
 		g.imgButtonHome = LoadImage(g.FSys, "data/gui/button-home.png")
+		g.imgButtonMenu = LoadImage(g.FSys, "data/gui/button-menu.png")
 
 		if CheckFailed == nil {
 			break
