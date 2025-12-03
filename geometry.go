@@ -50,6 +50,13 @@ func NewRectangle(min, max Pt) (r Rectangle) {
 	return
 }
 
+func NewRectangleI(x1, y1, x2, y2 int64) (r Rectangle) {
+	r.Min = Pt{x1, y1}
+	r.Max = Pt{x2, y2}
+	Assert(r.Min.X < r.Max.X && r.Min.Y < r.Max.Y)
+	return
+}
+
 func (r *Rectangle) Width() int64 {
 	Assert(r.Min.X < r.Max.X && r.Min.Y < r.Max.Y)
 	return r.Max.X - r.Min.X

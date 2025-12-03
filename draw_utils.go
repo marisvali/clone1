@@ -55,7 +55,7 @@ func DrawSpriteXY(screen *ebiten.Image, img *ebiten.Image,
 // - The top-left pixel of screen has coordinates (0, 0).
 // - The bottom-right pixel of screen has coordinates
 // (screenWidth - 1, screenHeight - 1).
-func SubImage(screen *ebiten.Image, r image.Rectangle) *ebiten.Image {
+func SubImage(screen *ebiten.Image, r Rectangle) *ebiten.Image {
 	// Do this because when dealing with sub-images in general I think in
 	// relative coordinates. So for img2 = img1.SubImage(pt1, pt2) I now expect
 	// that img2.At(0, 0) indicates the same pixel as img1.At(pt1). Ebitengine
@@ -65,9 +65,12 @@ func SubImage(screen *ebiten.Image, r image.Rectangle) *ebiten.Image {
 	// working with subimages, for me, is to be able to think in local
 	// coordinates instead of global ones.
 	minPt := screen.Bounds().Min
-	r.Min = r.Min.Add(minPt)
-	r.Max = r.Max.Add(minPt)
-	return screen.SubImage(r).(*ebiten.Image)
+	r2 := image.Rect(
+		minPt.X+int(r.Min.X),
+		minPt.Y+int(r.Min.Y),
+		minPt.X+int(r.Max.X),
+		minPt.Y+int(r.Max.Y))
+	return screen.SubImage(r2).(*ebiten.Image)
 }
 
 func DrawPixel(screen *ebiten.Image, pt Pt, color color.Color) {

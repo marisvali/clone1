@@ -14,20 +14,20 @@ func (g *Gui) Update() error {
 	g.justPressedKeys = inpututil.AppendJustPressedKeys(g.justPressedKeys)
 
 	switch g.state {
-	case GameOngoing:
-		g.UpdateGameOngoing()
+	case HomeScreen:
+		g.UpdateHomeScreen()
+	case PlayScreen:
+		g.UpdatePlayScreen()
+	case PausedScreen:
+		g.UpdatePausedScreen()
+	case GameOverScreen:
+		g.UpdateGameOverScreen()
+	case GameWonScreen:
+		g.UpdateGameWonScreen()
 	case Playback:
 		g.UpdatePlayback()
 	case DebugCrash:
 		g.UpdateDebugCrash()
-	case HomeScreen:
-		g.UpdateHomeScreen()
-	case GamePaused:
-		g.UpdateGamePaused()
-	case GameOver:
-		g.UpdateGameOver()
-	case GameWon:
-		g.UpdateGameWon()
 	default:
 		panic("unhandled default case")
 	}
@@ -35,9 +35,16 @@ func (g *Gui) Update() error {
 	return nil
 }
 
-func (g *Gui) UpdateGameOngoing() {
-	if g.JustClicked(g.buttonMenu) {
-		g.state = GamePaused
+func (g *Gui) UpdateHomeScreen() {
+	if g.JustClicked(playScreenMenuButton) {
+		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.state = PlayScreen
+	}
+}
+
+func (g *Gui) UpdatePlayScreen() {
+	if g.JustClicked(homeScreenMenuButton) {
+		g.state = PausedScreen
 		return
 	}
 
@@ -73,10 +80,10 @@ func (g *Gui) UpdateGameOngoing() {
 		input.Pos = Pt{int64(x), int64(y)}
 	}
 
-	input.Pos = g.screenToPlayArea(input.Pos)
+	input.Pos = g.ScreenToPlayArea(input.Pos)
 	justPressedKeys := inpututil.AppendJustPressedKeys(nil)
 	if slices.Contains(justPressedKeys, ebiten.KeyEscape) {
-		g.state = GamePaused
+		g.state = PausedScreen
 		return
 	}
 	if slices.Contains(justPressedKeys, ebiten.KeyR) {
@@ -132,49 +139,40 @@ func (g *Gui) UpdateGameOngoing() {
 	g.frameIdx++
 
 	if g.world.State == Lost {
-		g.state = GameOver
+		g.state = GameOverScreen
 	}
 	if g.world.State == Won {
-		g.state = GameWon
+		g.state = GameWonScreen
 	}
 }
 
-func (g *Gui) Pressed(key ebiten.Key) bool {
-	return slices.Contains(g.pressedKeys, key)
+func (g *Gui) UpdatePausedScreen() {
+	justPressedKeys := inpututil.AppendJustPressedKeys(nil)
+	if g.JustClicked(pausedScreenContinueButton1) ||
+		g.JustClicked(pausedScreenContinueButton2) ||
+		slices.Contains(justPressedKeys, ebiten.KeyEscape) {
+		g.state = PlayScreen
+	}
+	if g.JustClicked(pausedScreenRestartButton) {
+		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.state = PlayScreen
+	}
+	if g.JustClicked(pausedScreenHomeButton) {
+		g.state = HomeScreen
+	}
 }
 
-func (g *Gui) JustPressed(key ebiten.Key) bool {
-	return slices.Contains(g.justPressedKeys, key)
+func (g *Gui) UpdateGameOverScreen() {
+	if g.JustClicked(gameOverScreenRestartButton) {
+		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.state = PlayScreen
+	}
+	if g.JustClicked(gameOverScreenHomeButton) {
+		g.state = HomeScreen
+	}
 }
 
-func ImageRectContainsPt(r image.Rectangle, pt image.Point) bool {
-	return pt.X >= r.Min.X && pt.X <= r.Max.X && pt.Y >= r.Min.Y && pt.Y <= r.Max.Y
-}
-
-func (g *Gui) JustClicked(button image.Rectangle) bool {
-	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButton0) {
-		x, y := ebiten.CursorPosition()
-		return ImageRectContainsPt(button, image.Pt(x, y))
-	}
-	touchIDs := inpututil.AppendJustPressedTouchIDs([]ebiten.TouchID{})
-	if len(touchIDs) != 0 {
-		x, y := ebiten.TouchPosition(touchIDs[0])
-		return ImageRectContainsPt(button, image.Pt(x, y))
-	}
-	return false
-}
-
-func (g *Gui) LeftClickPressedOn(button image.Rectangle) bool {
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
-		x, y := ebiten.CursorPosition()
-		return ImageRectContainsPt(button, image.Pt(x, y))
-	}
-	touchIDs := ebiten.AppendTouchIDs([]ebiten.TouchID{})
-	if len(touchIDs) != 0 {
-		x, y := ebiten.TouchPosition(touchIDs[0])
-		return ImageRectContainsPt(button, image.Pt(x, y))
-	}
-	return false
+func (g *Gui) UpdateGameWonScreen() {
 }
 
 func (g *Gui) UpdatePlayback() {
@@ -301,37 +299,40 @@ func (g *Gui) UpdateDebugCrash() {
 	}
 }
 
-func (g *Gui) UpdateHomeScreen() {
-	if g.JustClicked(g.buttonPlay) {
-		g.world = NewWorldFromPlaythrough(g.playthrough)
-		g.state = GameOngoing
-	}
+func (g *Gui) Pressed(key ebiten.Key) bool {
+	return slices.Contains(g.pressedKeys, key)
 }
 
-func (g *Gui) UpdateGamePaused() {
-	justPressedKeys := inpututil.AppendJustPressedKeys(nil)
-	if g.JustClicked(g.buttonContinue) ||
-		slices.Contains(justPressedKeys, ebiten.KeyEscape) {
-		g.state = GameOngoing
-	}
-	if g.JustClicked(g.buttonRestart) {
-		g.world = NewWorldFromPlaythrough(g.playthrough)
-		g.state = GameOngoing
-	}
-	if g.JustClicked(g.buttonHome) {
-		g.state = HomeScreen
-	}
+func (g *Gui) JustPressed(key ebiten.Key) bool {
+	return slices.Contains(g.justPressedKeys, key)
 }
 
-func (g *Gui) UpdateGameOver() {
-	if g.JustClicked(g.buttonRestart) {
-		g.world = NewWorldFromPlaythrough(g.playthrough)
-		g.state = GameOngoing
-	}
-	if g.JustClicked(g.buttonHome) {
-		g.state = HomeScreen
-	}
+func ImageRectContainsPt(r image.Rectangle, pt image.Point) bool {
+	return pt.X >= r.Min.X && pt.X <= r.Max.X && pt.Y >= r.Min.Y && pt.Y <= r.Max.Y
 }
 
-func (g *Gui) UpdateGameWon() {
+func (g *Gui) JustClicked(button Rectangle) bool {
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButton0) {
+		x, y := ebiten.CursorPosition()
+		return button.ContainsPt(Pt{int64(x), int64(y)}.Minus(g.gameAreaOrigin))
+	}
+	touchIDs := inpututil.AppendJustPressedTouchIDs([]ebiten.TouchID{})
+	if len(touchIDs) != 0 {
+		x, y := ebiten.TouchPosition(touchIDs[0])
+		return button.ContainsPt(Pt{int64(x), int64(y)}.Minus(g.gameAreaOrigin))
+	}
+	return false
+}
+
+func (g *Gui) LeftClickPressedOn(button image.Rectangle) bool {
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
+		x, y := ebiten.CursorPosition()
+		return ImageRectContainsPt(button, image.Pt(x, y))
+	}
+	touchIDs := ebiten.AppendTouchIDs([]ebiten.TouchID{})
+	if len(touchIDs) != 0 {
+		x, y := ebiten.TouchPosition(touchIDs[0])
+		return ImageRectContainsPt(button, image.Pt(x, y))
+	}
+	return false
 }

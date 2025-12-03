@@ -50,13 +50,13 @@ var embeddedFiles embed.FS
 type GameState int64
 
 const (
-	GameOngoing GameState = iota
-	GamePaused
-	GameWon
-	GameOver
+	HomeScreen GameState = iota
+	PlayScreen
+	PausedScreen
+	GameOverScreen
+	GameWonScreen
 	Playback
 	DebugCrash
-	HomeScreen
 )
 
 type Gui struct {
@@ -74,13 +74,10 @@ type Gui struct {
 	imgFrame            *ebiten.Image
 	imgTimer            *ebiten.Image
 	imgTopbar           *ebiten.Image
-	imgScreenHome       *ebiten.Image
-	imgScreenPaused     *ebiten.Image
-	imgScreenGameOver   *ebiten.Image
-	imgButtonPlay       *ebiten.Image
-	imgButtonRestart    *ebiten.Image
-	imgButtonHome       *ebiten.Image
-	imgButtonMenu       *ebiten.Image
+	imgHomeScreen       *ebiten.Image
+	imgScreenPlay       *ebiten.Image
+	imgPausedScreen     *ebiten.Image
+	imgGameOverScreen   *ebiten.Image
 	folderWatcher1      FolderWatcher
 	defaultFont         font.Face
 	screenWidth         int64
@@ -93,13 +90,8 @@ type Gui struct {
 	debugMarginWidth    int64
 	debugMarginHeight   int64
 	playbackPaused      bool
-	buttonPlaybackPlay  image.Rectangle
+	buttonPlaybackPlay  Rectangle
 	buttonPlaybackBar   image.Rectangle
-	buttonPlay          image.Rectangle
-	buttonContinue      image.Rectangle
-	buttonRestart       image.Rectangle
-	buttonHome          image.Rectangle
-	buttonMenu          image.Rectangle
 	pressedKeys         []ebiten.Key
 	justPressedKeys     []ebiten.Key // keys pressed in this frame
 	FrameSkipAltArrow   int64
@@ -110,6 +102,8 @@ type Gui struct {
 	slowdownFactor      int64       // 1 - does nothing, 2 - game is twice as slow etc
 	accumulatedInput    PlayerInput // only relevant for slowdownFactor > 1, see
 	// the implementation for a more detailed explanation
+	gameAreaOrigin Pt
+	playAreaOrigin Pt
 }
 
 func main() {
@@ -129,7 +123,7 @@ func main() {
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
 	g.slowdownFactor = 1
-	g.state = GameOngoing
+	g.state = PlayScreen
 	// g.state = DebugCrash
 	g.state = HomeScreen
 
@@ -185,7 +179,7 @@ func main() {
 		g.folderWatcher1.FolderContentsChanged()
 	}
 
-	g.loadGuiData()
+	g.LoadGuiData()
 
 	// Load the Arial font.
 	var err error
