@@ -416,30 +416,40 @@ func (w *World) DetermineDraggedBrick(input PlayerInput) {
 
 	if input.JustPressed {
 		// Check if there's any brick under the click.
+		// Get the closest brick.
+		var closest *Brick
+		var minDist int64 = math.MaxInt64
 		for i := range w.Bricks {
 			r := w.BrickBounds(w.Bricks[i].PixelPos)
-			if r.ContainsPt(input.Pos) {
-				// We can check here if dragged == nil. If not, it means that
-				// somehow the player clicked a brick, didn't release it and
-				// then clicked on another brick. This should not be possible
-				// unless there is a hardware failure or the OS/browser/etc
-				// doesn't send the game all the hardware signals from the
-				// player. I will leave leave the assert here during development
-				// to catch errors in my logic. But I will also handle failures
-				// gracefully, for when the assert is disabled.
-				Assert(dragged == nil)
-
-				if dragged != nil {
-					// Make the previously dragged brick canonical and let the
-					// canonical adjustment system handle it.
-					dragged.State = Canonical
-				}
-
-				w.Bricks[i].State = Dragged
-				dragged = &w.Bricks[i]
-				w.DraggingOffset = w.Bricks[i].PixelPos.Minus(input.Pos)
-				break
+			center := r.Min.Plus(r.Max).DivBy(2)
+			dist := center.SquaredDistTo(input.Pos)
+			if dist < minDist {
+				minDist = dist
+				closest = &w.Bricks[i]
 			}
+		}
+
+		// Check if the closest brick is close enough to be dragged.
+		minDistForDragging := Sqr(int64(135))
+		if minDist <= minDistForDragging {
+			// We can check here if dragged == nil. If not, it means that
+			// somehow the player clicked a brick, didn't release it and
+			// then clicked on another brick. This should not be possible
+			// unless there is a hardware failure or the OS/browser/etc
+			// doesn't send the game all the hardware signals from the
+			// player. I will leave leave the assert here during development
+			// to catch errors in my logic. But I will also handle failures
+			// gracefully, for when the assert is disabled.
+			Assert(dragged == nil)
+
+			if dragged != nil {
+				// Make the previously dragged brick canonical and let the
+				// canonical adjustment system handle it.
+				dragged.State = Canonical
+			}
+			dragged = closest
+			dragged.State = Dragged
+			w.DraggingOffset = dragged.PixelPos.Minus(input.Pos)
 		}
 	}
 
