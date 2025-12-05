@@ -80,8 +80,6 @@ type Gui struct {
 	imgGameOverScreen   *ebiten.Image
 	folderWatcher1      FolderWatcher
 	defaultFont         font.Face
-	screenWidth         int64
-	screenHeight        int64
 	playthrough         Playthrough
 	recordingFile       string
 	frameIdx            int64

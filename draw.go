@@ -375,10 +375,8 @@ func (g *Gui) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight
 	// Store these values in Gui so that Update() can use them as well,
 	// otherwise only Draw() will have access to them via the size of the
 	// screen parameter it receives.
-	g.screenWidth = int64(screenWidth)
-	g.screenHeight = int64(screenHeight)
-	g.gameAreaOrigin.X = (g.screenWidth - g.adjustedGameWidth) / 2
-	g.gameAreaOrigin.Y = (g.screenHeight - g.adjustedGameHeight) / 2
+	g.gameAreaOrigin.X = (int64(screenWidth) - g.adjustedGameWidth) / 2
+	g.gameAreaOrigin.Y = (int64(screenHeight) - g.adjustedGameHeight) / 2
 	g.playAreaOrigin = g.gameAreaOrigin.Plus(Pt{MarginLeft, MarginUp})
 	return
 }

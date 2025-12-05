@@ -50,36 +50,8 @@ func (g *Gui) UpdatePlayScreen() {
 
 	// Get the player input.
 	var input PlayerInput
-
-	input.JustPressed = false
-	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-		input.JustPressed = true
-	}
-	touchIDs := inpututil.AppendJustPressedTouchIDs([]ebiten.TouchID{})
-	if len(touchIDs) > 0 {
-		input.JustPressed = true
-	}
-
-	input.JustReleased = false
-	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
-		input.JustReleased = true
-
-	}
-	touchIDs = inpututil.AppendJustReleasedTouchIDs([]ebiten.TouchID{})
-	if len(touchIDs) > 0 {
-		input.JustReleased = true
-	}
-
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
-		x, y := ebiten.CursorPosition()
-		input.Pos = Pt{int64(x), int64(y)}
-	}
-	touchIDs = ebiten.AppendTouchIDs([]ebiten.TouchID{})
-	if len(touchIDs) > 0 {
-		x, y := ebiten.TouchPosition(touchIDs[0])
-		input.Pos = Pt{int64(x), int64(y)}
-	}
-
+	_, input.JustPressed, input.JustReleased, input.Pos.X, input.Pos.Y =
+		g.ButtonState()
 	input.Pos = g.ScreenToPlayArea(input.Pos)
 	justPressedKeys := inpututil.AppendJustPressedKeys(nil)
 	if slices.Contains(justPressedKeys, ebiten.KeyEscape) {
@@ -188,7 +160,7 @@ func (g *Gui) UpdatePlayback() {
 
 	// Compute the target frame index based on where on the play bar the user
 	// clicked.
-	if g.LeftClickPressedOn(g.buttonPlaybackBar) {
+	if g.PressedOn(g.buttonPlaybackBar) {
 		// Get the distance between the start and the cursor on the play bar.
 		x, _ := ebiten.CursorPosition()
 		dx := int64(x - g.buttonPlaybackBar.Min.X)
@@ -312,27 +284,62 @@ func ImageRectContainsPt(r image.Rectangle, pt image.Point) bool {
 }
 
 func (g *Gui) JustClicked(button Rectangle) bool {
-	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButton0) {
-		x, y := ebiten.CursorPosition()
-		return button.ContainsPt(Pt{int64(x), int64(y)}.Minus(g.gameAreaOrigin))
-	}
-	touchIDs := inpututil.AppendJustPressedTouchIDs([]ebiten.TouchID{})
-	if len(touchIDs) != 0 {
-		x, y := ebiten.TouchPosition(touchIDs[0])
-		return button.ContainsPt(Pt{int64(x), int64(y)}.Minus(g.gameAreaOrigin))
+	_, justPressed, _, x, y := g.ButtonState()
+	if justPressed {
+		return button.ContainsPt(Pt{x, y}.Minus(g.gameAreaOrigin))
 	}
 	return false
 }
 
-func (g *Gui) LeftClickPressedOn(button image.Rectangle) bool {
-	if ebiten.IsMouseButtonPressed(ebiten.MouseButton0) {
-		x, y := ebiten.CursorPosition()
-		return ImageRectContainsPt(button, image.Pt(x, y))
-	}
-	touchIDs := ebiten.AppendTouchIDs([]ebiten.TouchID{})
-	if len(touchIDs) != 0 {
-		x, y := ebiten.TouchPosition(touchIDs[0])
-		return ImageRectContainsPt(button, image.Pt(x, y))
+func (g *Gui) PressedOn(button image.Rectangle) bool {
+	pressed, _, _, x, y := g.ButtonState()
+	if pressed {
+		return ImageRectContainsPt(button, image.Pt(int(x), int(y)))
 	}
 	return false
+}
+
+func (g *Gui) ButtonState() (pressed, justPressed, justReleased bool, x, y int64) {
+	// Check for justPressed.
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		xi, yi := ebiten.CursorPosition()
+		return true, true, false, int64(xi), int64(yi)
+	}
+
+	touchIDs := inpututil.AppendJustPressedTouchIDs([]ebiten.TouchID{})
+	if len(touchIDs) > 0 {
+		xi, yi := ebiten.TouchPosition(touchIDs[0])
+		return true, true, false, int64(xi), int64(yi)
+	}
+
+	// Check for justReleased.
+	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
+		xi, yi := ebiten.CursorPosition()
+		return false, false, true, int64(xi), int64(yi)
+	}
+
+	touchIDs = inpututil.AppendJustReleasedTouchIDs([]ebiten.TouchID{})
+	if len(touchIDs) > 0 {
+		xi, yi := ebiten.TouchPosition(touchIDs[0])
+		return false, false, true, int64(xi), int64(yi)
+	}
+
+	// Check for pressed.
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+		xi, yi := ebiten.CursorPosition()
+		return true, false, false, int64(xi), int64(yi)
+	}
+
+	touchIDs = ebiten.AppendTouchIDs([]ebiten.TouchID{})
+	if len(touchIDs) > 0 {
+		xi, yi := ebiten.TouchPosition(touchIDs[0])
+		return true, false, false, int64(xi), int64(yi)
+	}
+
+	// Nothing is pressed, just pressed or just released.
+	// Set x, y to the mouse position. This will return 0, 0 on mobile but the
+	// button position should not be used by anything on the mobile if nothing
+	// is pressed.
+	xi, yi := ebiten.CursorPosition()
+	return false, false, false, int64(xi), int64(yi)
 }
