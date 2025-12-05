@@ -468,6 +468,12 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 		return
 	}
 
+	if w.NoMoreMergesArePossible() {
+		w.RegularCooldownIdx = 0
+		w.State = ComingUp
+		return
+	}
+
 	w.UpdateDraggedBrick(input)
 	w.UpdateFallingBricks()
 	w.UpdateCanonicalBricks()
@@ -492,6 +498,17 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 	// 		}
 	// 	}
 	// }
+}
+
+func (w *World) NoMoreMergesArePossible() bool {
+	valExists := map[int64]bool{}
+	for i := range w.Bricks {
+		if valExists[w.Bricks[i].Val] {
+			return false
+		}
+		valExists[w.Bricks[i].Val] = true
+	}
+	return true
 }
 
 func (w *World) UpdateDraggedBrick(input PlayerInput) {
