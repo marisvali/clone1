@@ -6,7 +6,6 @@ import (
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/opentype"
-	"image"
 	_ "image/png"
 	"os"
 )
@@ -84,24 +83,30 @@ type Gui struct {
 	recordingFile       string
 	frameIdx            int64
 	state               GameState
-	mousePt             Pt // mouse position in this frame
+	virtualPointerPos   Pt
 	debugMarginWidth    int64
 	debugMarginHeight   int64
 	playbackPaused      bool
-	buttonPlaybackPlay  Rectangle
-	buttonPlaybackBar   image.Rectangle
+	pointer             PointerState
 	pressedKeys         []ebiten.Key
 	justPressedKeys     []ebiten.Key // keys pressed in this frame
 	FrameSkipAltArrow   int64
 	FrameSkipShiftArrow int64
 	FrameSkipArrow      int64
-	adjustedGameWidth   int64
-	adjustedGameHeight  int64
+	enableDebugAreas    bool
 	slowdownFactor      int64       // 1 - does nothing, 2 - game is twice as slow etc
 	accumulatedInput    PlayerInput // only relevant for slowdownFactor > 1, see
 	// the implementation for a more detailed explanation
-	gameAreaOrigin Pt
-	playAreaOrigin Pt
+	gameArea            Rectangle
+	horizontalDebugArea Rectangle
+	verticalDebugArea   Rectangle
+}
+
+type PointerState struct {
+	Pressed      bool
+	JustPressed  bool
+	JustReleased bool
+	Pos          Pt
 }
 
 func main() {
@@ -112,11 +117,7 @@ func main() {
 	g.playthrough.InputVersion = InputVersion
 	g.playthrough.SimulationVersion = SimulationVersion
 	g.playthrough.ReleaseVersion = ReleaseVersion
-	g.debugMarginWidth = 0
-	g.debugMarginHeight = 100
 	g.recordingFile = "last-recording.clone1"
-	g.adjustedGameWidth = GameWidth
-	g.adjustedGameHeight = GameHeight
 	g.FrameSkipAltArrow = 1
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
@@ -124,6 +125,7 @@ func main() {
 	g.state = PlayScreen
 	// g.state = DebugCrash
 	g.state = HomeScreen
+	g.state = Playback
 
 	if len(os.Args) == 2 {
 		g.recordingFile = os.Args[1]
@@ -132,8 +134,7 @@ func main() {
 
 	if g.state == Playback || g.state == DebugCrash {
 		g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))
-		g.adjustedGameWidth += g.debugMarginWidth
-		g.adjustedGameHeight += g.debugMarginHeight
+		g.enableDebugAreas = true
 	}
 
 	if g.state == DebugCrash {

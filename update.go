@@ -3,11 +3,11 @@ package main
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"image"
 	"slices"
 )
 
 func (g *Gui) Update() error {
+	g.pointer = g.GetPointerState()
 	g.pressedKeys = g.pressedKeys[:0]
 	g.pressedKeys = inpututil.AppendPressedKeys(g.pressedKeys)
 	g.justPressedKeys = g.justPressedKeys[:0]
@@ -36,38 +36,33 @@ func (g *Gui) Update() error {
 }
 
 func (g *Gui) UpdateHomeScreen() {
-	if g.JustClicked(playScreenMenuButton) {
+	if g.JustPressed(playScreenMenuButton) {
 		g.world = NewWorldFromPlaythrough(g.playthrough)
 		g.state = PlayScreen
 	}
 }
 
 func (g *Gui) UpdatePlayScreen() {
-	if g.JustClicked(homeScreenMenuButton) {
+	if g.JustPressed(homeScreenMenuButton) {
 		g.state = PausedScreen
 		return
 	}
 
 	// Get the player input.
 	var input PlayerInput
-	_, input.JustPressed, input.JustReleased, input.Pos.X, input.Pos.Y =
-		g.ButtonState()
-	input.Pos = g.ScreenToPlayArea(input.Pos)
-	justPressedKeys := inpututil.AppendJustPressedKeys(nil)
-	if slices.Contains(justPressedKeys, ebiten.KeyEscape) {
+	input.JustPressed = g.pointer.JustPressed
+	input.JustReleased = g.pointer.JustReleased
+	input.Pos = g.ScreenToWorld(g.pointer.Pos)
+	if g.JustPressedKey(ebiten.KeyEscape) {
 		g.state = PausedScreen
 		return
 	}
-	if slices.Contains(justPressedKeys, ebiten.KeyR) {
+	if g.JustPressedKey(ebiten.KeyR) {
 		input.ResetWorld = true
 	}
-	if slices.Contains(justPressedKeys, ebiten.KeyC) {
+	if g.JustPressedKey(ebiten.KeyC) {
 		input.TriggerComingUp = true
 	}
-
-	// Remember cursor position in order to draw the virtual cursor during
-	// Draw().
-	g.mousePt = input.Pos
 
 	// We want to slow down the game sometimes by only updating the World once
 	// every n frames. This is very useful when it's necessary to do some tricky
@@ -99,7 +94,7 @@ func (g *Gui) UpdatePlayScreen() {
 			// IMPORTANT: save the playthrough before stepping the World. If
 			// a bug in the World causes it to crash, we want to save the input
 			// that caused the bug before the program crashes.
-			// WriteFile(g.recordingFile, g.playthrough.Serialize())
+			WriteFile(g.recordingFile, g.playthrough.Serialize())
 		}
 
 		// Step the world.
@@ -119,27 +114,26 @@ func (g *Gui) UpdatePlayScreen() {
 }
 
 func (g *Gui) UpdatePausedScreen() {
-	justPressedKeys := inpututil.AppendJustPressedKeys(nil)
-	if g.JustClicked(pausedScreenContinueButton1) ||
-		g.JustClicked(pausedScreenContinueButton2) ||
-		slices.Contains(justPressedKeys, ebiten.KeyEscape) {
+	if g.JustPressed(pausedScreenContinueButton1) ||
+		g.JustPressed(pausedScreenContinueButton2) ||
+		g.JustPressedKey(ebiten.KeyEscape) {
 		g.state = PlayScreen
 	}
-	if g.JustClicked(pausedScreenRestartButton) {
+	if g.JustPressed(pausedScreenRestartButton) {
 		g.world = NewWorldFromPlaythrough(g.playthrough)
 		g.state = PlayScreen
 	}
-	if g.JustClicked(pausedScreenHomeButton) {
+	if g.JustPressed(pausedScreenHomeButton) {
 		g.state = HomeScreen
 	}
 }
 
 func (g *Gui) UpdateGameOverScreen() {
-	if g.JustClicked(gameOverScreenRestartButton) {
+	if g.JustPressed(gameOverScreenRestartButton) {
 		g.world = NewWorldFromPlaythrough(g.playthrough)
 		g.state = PlayScreen
 	}
-	if g.JustClicked(gameOverScreenHomeButton) {
+	if g.JustPressed(gameOverScreenHomeButton) {
 		g.state = HomeScreen
 	}
 }
@@ -149,8 +143,10 @@ func (g *Gui) UpdateGameWonScreen() {
 
 func (g *Gui) UpdatePlayback() {
 	nFrames := int64(len(g.playthrough.History))
+	pos := g.pointer.Pos.Minus(g.horizontalDebugArea.Min)
 
-	userRequestedPlaybackPause := g.JustPressed(ebiten.KeySpace) || g.JustClicked(g.buttonPlaybackPlay)
+	userRequestedPlaybackPause := g.JustPressedKey(ebiten.KeySpace) ||
+		g.pointer.JustPressed && debugPlayButton.ContainsPt(pos)
 	if userRequestedPlaybackPause {
 		g.playbackPaused = !g.playbackPaused
 	}
@@ -159,31 +155,32 @@ func (g *Gui) UpdatePlayback() {
 	targetFrameIdx := g.frameIdx
 
 	// Compute the target frame index based on where on the play bar the user
-	// clicked.
-	if g.PressedOn(g.buttonPlaybackBar) {
+	// pressed.
+	if g.pointer.Pressed && debugPlayBar.ContainsPt(pos) {
 		// Get the distance between the start and the cursor on the play bar.
-		x, _ := ebiten.CursorPosition()
-		dx := int64(x - g.buttonPlaybackBar.Min.X)
-		targetFrameIdx = dx * nFrames / int64(g.buttonPlaybackBar.Size().X)
+		dx := pos.X - debugPlayBar.Min.X
+		targetFrameIdx = dx * nFrames / debugPlayBar.Width()
 	}
 
-	if g.JustPressed(ebiten.KeyLeft) && g.Pressed(ebiten.KeyAlt) {
+	if g.JustPressedKey(ebiten.KeyLeft) && g.IsPressed(ebiten.KeyAlt) {
 		targetFrameIdx -= g.FrameSkipAltArrow
 	}
 
-	if g.JustPressed(ebiten.KeyRight) && g.Pressed(ebiten.KeyAlt) {
+	if g.JustPressedKey(ebiten.KeyRight) && g.IsPressed(ebiten.KeyAlt) {
 		targetFrameIdx += g.FrameSkipAltArrow
 	}
 
-	if g.Pressed(ebiten.KeyLeft) && g.Pressed(ebiten.KeyShift) {
+	if g.IsPressed(ebiten.KeyLeft) && g.IsPressed(ebiten.KeyShift) {
 		targetFrameIdx -= g.FrameSkipShiftArrow
 	}
 
-	if g.Pressed(ebiten.KeyRight) && g.Pressed(ebiten.KeyShift) {
+	if g.IsPressed(ebiten.KeyRight) && g.IsPressed(ebiten.KeyShift) {
 		targetFrameIdx += g.FrameSkipShiftArrow
 	}
 
-	if g.Pressed(ebiten.KeyLeft) && !g.Pressed(ebiten.KeyShift) && !g.Pressed(ebiten.KeyAlt) {
+	if g.IsPressed(ebiten.KeyLeft) &&
+		!g.IsPressed(ebiten.KeyShift) &&
+		!g.IsPressed(ebiten.KeyAlt) {
 		if g.playbackPaused {
 			targetFrameIdx -= g.FrameSkipArrow
 		} else {
@@ -191,7 +188,9 @@ func (g *Gui) UpdatePlayback() {
 		}
 	}
 
-	if g.Pressed(ebiten.KeyRight) && !g.Pressed(ebiten.KeyShift) && !g.Pressed(ebiten.KeyAlt) {
+	if g.IsPressed(ebiten.KeyRight) &&
+		!g.IsPressed(ebiten.KeyShift) &&
+		!g.IsPressed(ebiten.KeyAlt) {
 		targetFrameIdx += g.FrameSkipArrow
 	}
 
@@ -218,9 +217,9 @@ func (g *Gui) UpdatePlayback() {
 
 	// Get input from recording.
 	input := g.playthrough.History[g.frameIdx]
-	// Remember cursor position in order to draw the virtual cursor during
-	// Draw().
-	g.mousePt = input.Pos
+	// Set virtual pointer position so that the virtual pointer can be drawn
+	// in Draw().
+	g.virtualPointerPos = g.WorldToScreen(input.Pos)
 
 	// input = g.ai.Step(&g.world)
 	if !g.playbackPaused {
@@ -238,11 +237,11 @@ func (g *Gui) UpdatePlayback() {
 
 func (g *Gui) UpdateDebugCrash() {
 	var input PlayerInput
-	// Remember cursor position in order to draw the virtual cursor during
-	// Draw().
 	if g.frameIdx < int64(len(g.playthrough.History)) {
 		input = g.playthrough.History[g.frameIdx]
-		g.mousePt = input.Pos
+		// Set virtual pointer position so that the virtual pointer can be drawn
+		// in Draw().
+		g.virtualPointerPos = g.WorldToScreen(input.Pos)
 	}
 
 	// Don't do anything, wait for the player to press a key.
@@ -271,75 +270,64 @@ func (g *Gui) UpdateDebugCrash() {
 	}
 }
 
-func (g *Gui) Pressed(key ebiten.Key) bool {
-	return slices.Contains(g.pressedKeys, key)
+func (g *Gui) IsPressed(k ebiten.Key) bool {
+	return slices.Contains(g.pressedKeys, k)
 }
 
-func (g *Gui) JustPressed(key ebiten.Key) bool {
-	return slices.Contains(g.justPressedKeys, key)
+func (g *Gui) JustPressedKey(k ebiten.Key) bool {
+	return slices.Contains(g.justPressedKeys, k)
 }
 
-func ImageRectContainsPt(r image.Rectangle, pt image.Point) bool {
-	return pt.X >= r.Min.X && pt.X <= r.Max.X && pt.Y >= r.Min.Y && pt.Y <= r.Max.Y
-}
-
-func (g *Gui) JustClicked(button Rectangle) bool {
-	_, justPressed, _, x, y := g.ButtonState()
-	if justPressed {
-		return button.ContainsPt(Pt{x, y}.Minus(g.gameAreaOrigin))
+func (g *Gui) JustPressed(b Rectangle) bool {
+	if !g.pointer.JustPressed {
+		return false
 	}
-	return false
+
+	// The b rectangle is relative to the game area.
+	return b.ContainsPt(g.ScreenToGame(g.pointer.Pos))
 }
 
-func (g *Gui) PressedOn(button image.Rectangle) bool {
-	pressed, _, _, x, y := g.ButtonState()
-	if pressed {
-		return ImageRectContainsPt(button, image.Pt(int(x), int(y)))
-	}
-	return false
-}
-
-func (g *Gui) ButtonState() (pressed, justPressed, justReleased bool, x, y int64) {
+func (g *Gui) GetPointerState() PointerState {
 	// Check for justPressed.
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-		xi, yi := ebiten.CursorPosition()
-		return true, true, false, int64(xi), int64(yi)
+		x, y := ebiten.CursorPosition()
+		return PointerState{true, true, false, Pt{int64(x), int64(y)}}
 	}
 
 	touchIDs := inpututil.AppendJustPressedTouchIDs([]ebiten.TouchID{})
 	if len(touchIDs) > 0 {
-		xi, yi := ebiten.TouchPosition(touchIDs[0])
-		return true, true, false, int64(xi), int64(yi)
+		x, y := ebiten.TouchPosition(touchIDs[0])
+		return PointerState{true, true, false, Pt{int64(x), int64(y)}}
 	}
 
 	// Check for justReleased.
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
-		xi, yi := ebiten.CursorPosition()
-		return false, false, true, int64(xi), int64(yi)
+		x, y := ebiten.CursorPosition()
+		return PointerState{false, false, true, Pt{int64(x), int64(y)}}
 	}
 
 	touchIDs = inpututil.AppendJustReleasedTouchIDs([]ebiten.TouchID{})
 	if len(touchIDs) > 0 {
-		xi, yi := ebiten.TouchPosition(touchIDs[0])
-		return false, false, true, int64(xi), int64(yi)
+		x, y := ebiten.TouchPosition(touchIDs[0])
+		return PointerState{false, false, true, Pt{int64(x), int64(y)}}
 	}
 
 	// Check for pressed.
 	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
-		xi, yi := ebiten.CursorPosition()
-		return true, false, false, int64(xi), int64(yi)
+		x, y := ebiten.CursorPosition()
+		return PointerState{true, false, false, Pt{int64(x), int64(y)}}
 	}
 
 	touchIDs = ebiten.AppendTouchIDs([]ebiten.TouchID{})
 	if len(touchIDs) > 0 {
-		xi, yi := ebiten.TouchPosition(touchIDs[0])
-		return true, false, false, int64(xi), int64(yi)
+		x, y := ebiten.TouchPosition(touchIDs[0])
+		return PointerState{true, false, false, Pt{int64(x), int64(y)}}
 	}
 
 	// Nothing is pressed, just pressed or just released.
 	// Set x, y to the mouse position. This will return 0, 0 on mobile but the
 	// button position should not be used by anything on the mobile if nothing
 	// is pressed.
-	xi, yi := ebiten.CursorPosition()
-	return false, false, false, int64(xi), int64(yi)
+	x, y := ebiten.CursorPosition()
+	return PointerState{false, false, false, Pt{int64(x), int64(y)}}
 }
