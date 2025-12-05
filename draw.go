@@ -119,7 +119,7 @@ func (g *Gui) DrawPlayScreen(screen *ebiten.Image) {
 
 	// Draw timer.
 	// Draw timer bar going down.
-	totalWidth := int64(680)
+	totalWidth := int64(685)
 	timeLeft := totalWidth * g.world.RegularCooldownIdx / g.world.RegularCooldown
 	timerBar := SubImage(screen, NewRectangleI(
 		270,
