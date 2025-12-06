@@ -263,3 +263,28 @@ func Remove[T any](s []T, i int) []T {
 	s[i] = s[len(s)-1]
 	return s[:len(s)-1]
 }
+
+var digitsBuffer = make([]int64, 0, 10)
+
+func GetDigitArray(val int64) []int64 {
+	digitsBuffer = digitsBuffer[:0]
+	if val == 0 {
+		digitsBuffer = append(digitsBuffer, 0)
+		return digitsBuffer
+	}
+
+	for val > 0 {
+		digitsBuffer = append(digitsBuffer, val%10)
+		val = val / 10
+	}
+
+	// Reverse slice.
+	n := len(digitsBuffer)
+	for i := range n / 2 {
+		x := digitsBuffer[i]
+		digitsBuffer[i] = digitsBuffer[n-i-1]
+		digitsBuffer[n-i-1] = x
+	}
+
+	return digitsBuffer
+}

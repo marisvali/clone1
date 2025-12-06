@@ -297,6 +297,7 @@ type World struct {
 	CanPosBuffer             []Pt
 	OriginalBricks           []Brick
 	FirstComingUp            bool
+	Score                    int64
 }
 
 type PlayerInput struct {
@@ -370,6 +371,8 @@ func (w *World) Initialize() {
 }
 
 func (w *World) Step(input PlayerInput) {
+	w.Score++
+
 	// Reset the world.
 	if input.ResetWorld {
 		w.Initialize()

@@ -64,6 +64,7 @@ type Gui struct {
 	FSys                FS
 	imgBlank            *ebiten.Image
 	imgBrick            [31]*ebiten.Image
+	imgDigit            [10]*ebiten.Image
 	imgFalling          *ebiten.Image
 	imgCursor           *ebiten.Image
 	imgPlaybackCursor   *ebiten.Image
@@ -100,6 +101,7 @@ type Gui struct {
 	gameArea            Rectangle
 	horizontalDebugArea Rectangle
 	verticalDebugArea   Rectangle
+	bestScore           int64
 }
 
 type PointerState struct {
@@ -125,7 +127,7 @@ func main() {
 	g.state = PlayScreen
 	// g.state = DebugCrash
 	g.state = HomeScreen
-	g.state = Playback
+	// g.state = Playback
 
 	if len(os.Args) == 2 {
 		g.recordingFile = os.Args[1]

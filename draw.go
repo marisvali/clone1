@@ -57,6 +57,10 @@ func (g *Gui) DrawHomeScreen(screen *ebiten.Image) {
 func (g *Gui) DrawPlayScreen(screen *ebiten.Image) {
 	DrawSpriteStretched(screen, g.imgScreenPlay)
 
+	g.bestScore = 14326
+	g.DrawScore(screen, g.bestScore, 444)
+	g.DrawScore(screen, g.world.Score, 886)
+
 	// Draw time left in orange.
 	timeLeftWidth := playScreenTimerArea.Width() *
 		g.world.RegularCooldownIdx /
@@ -125,6 +129,28 @@ func (g *Gui) DrawPlayScreen(screen *ebiten.Image) {
 		DrawSprite(screen, g.imgCursor,
 			float64(pos.X), float64(pos.Y),
 			50.0, 50.0)
+	}
+}
+
+func (g *Gui) DrawScore(screen *ebiten.Image, score int64, middleX float64) {
+	digits := GetDigitArray(score)
+
+	// Get total length of the final score image.
+	totalW := float64(0)
+	marginBetweenDigits := float64(2)
+	for _, d := range digits {
+		b := g.imgDigit[d].Bounds()
+		finalW := float64(b.Dx() * 60 / b.Dy())
+		totalW += finalW
+	}
+	totalW += marginBetweenDigits * float64(len(digits)-1)
+
+	scoreX := middleX - totalW/2
+	for _, d := range digits {
+		b := g.imgDigit[d].Bounds()
+		finalW := float64(b.Dx() * 60 / b.Dy())
+		DrawSprite(screen, g.imgDigit[d], scoreX, 56, finalW, 60)
+		scoreX += finalW + marginBetweenDigits
 	}
 }
 
@@ -241,6 +267,10 @@ func (g *Gui) LoadGuiData() {
 		for i := int64(1); i <= g.world.MaxBrickValue; i++ {
 			filename := fmt.Sprintf("data/gui/%02d.png", i)
 			g.imgBrick[i] = LoadImage(g.FSys, filename)
+		}
+		for i := int64(0); i <= 9; i++ {
+			filename := fmt.Sprintf("data/gui/digit%d.png", i)
+			g.imgDigit[i] = LoadImage(g.FSys, filename)
 		}
 		g.imgCursor = LoadImage(g.FSys, "data/gui/cursor.png")
 		g.imgPlaybackCursor = LoadImage(g.FSys, "data/gui/playback-cursor.png")
