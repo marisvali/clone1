@@ -162,8 +162,8 @@ func (g *Gui) DrawGameOverScreen(screen *ebiten.Image) {
 	DrawSpriteStretched(screen, g.imgGameOverScreen)
 }
 
-func (g *Gui) DrawGameWonScreen(uiScreen *ebiten.Image) {
-
+func (g *Gui) DrawGameWonScreen(screen *ebiten.Image) {
+	DrawSpriteStretched(screen, g.imgGameWonScreen)
 }
 
 func (g *Gui) DrawDebugControlsHorizontal(screen *ebiten.Image) {
@@ -282,6 +282,7 @@ func (g *Gui) LoadGuiData() {
 		g.imgScreenPlay = LoadImage(g.FSys, "data/gui/screen-play.png")
 		g.imgPausedScreen = LoadImage(g.FSys, "data/gui/screen-paused.png")
 		g.imgGameOverScreen = LoadImage(g.FSys, "data/gui/screen-game-over.png")
+		g.imgGameWonScreen = LoadImage(g.FSys, "data/gui/screen-game-won.png")
 
 		if CheckFailed == nil {
 			break

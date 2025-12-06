@@ -38,6 +38,8 @@ var pausedScreenRestartButton = NewRectangleI(303, 990, 137, 137)
 var pausedScreenHomeButton = NewRectangleI(303, 1172, 137, 137)
 var gameOverScreenRestartButton = NewRectangleI(303, 1114, 137, 137)
 var gameOverScreenHomeButton = NewRectangleI(303, 1296, 137, 137)
+var gameWonScreenRestartButton = NewRectangleI(332, 1236, 137, 137)
+var gameWonScreenHomeButton = NewRectangleI(699, 1236, 137, 137)
 
 // The areas below are relative to a debug area and are known at compile time.
 var debugPlayButton = NewRectangleI(0, 0, DebugHeight, DebugHeight)

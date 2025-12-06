@@ -314,7 +314,7 @@ func (p *PlayerInput) EventOccurred() bool {
 
 func NewWorld(seed int64, l Level) (w World) {
 	// Set constants and buffers.
-	w.MaxBrickValue = 30
+	w.MaxBrickValue = 10
 	w.MaxInitialBrickValue = 5
 	w.DragSpeed = 100
 	w.CanonicalAdjustmentSpeed = 21
@@ -757,17 +757,12 @@ func (w *World) MergeBricks() {
 
 		// Update the score.
 		w.Score += brickToUpdate.Val
-
 		brickToUpdate.Val++
-
-		// TODO: change this
-		// Do a loop for now between values as I don't have all the
-		// values and the rules for them are not yet clear.
-		if brickToUpdate.Val > w.MaxBrickValue {
-			brickToUpdate.Val = 1
-		}
 		brickToUpdate.State = Canonical
 		w.Bricks = Remove(w.Bricks, idxToRemove)
+		if brickToUpdate.Val == w.MaxBrickValue {
+			w.State = Won
+		}
 	}
 }
 

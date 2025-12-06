@@ -139,6 +139,13 @@ func (g *Gui) UpdateGameOverScreen() {
 }
 
 func (g *Gui) UpdateGameWonScreen() {
+	if g.JustPressed(gameWonScreenRestartButton) {
+		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.state = PlayScreen
+	}
+	if g.JustPressed(gameWonScreenHomeButton) {
+		g.state = HomeScreen
+	}
 }
 
 func (g *Gui) UpdatePlayback() {
