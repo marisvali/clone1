@@ -63,8 +63,8 @@ func (g *Gui) DrawPlayScreen(screen *ebiten.Image) {
 
 	// Draw time left in orange.
 	timeLeftWidth := playScreenTimerArea.Width() *
-		g.world.RegularCooldownIdx /
-		g.world.RegularCooldown
+		g.world.TimerCooldownIdx /
+		g.world.TimerCooldown
 	timeLeftArea := playScreenTimerArea
 	timeLeftArea.Max.X = timeLeftArea.Min.X + timeLeftWidth
 	SubImage(screen, timeLeftArea).Fill(color.NRGBA{

@@ -281,8 +281,8 @@ type World struct {
 	Bricks                   []Brick
 	DraggingOffset           Pt
 	DebugPts                 []Pt
-	RegularCooldown          int64
-	RegularCooldownIdx       int64
+	TimerCooldown            int64
+	TimerCooldownIdx         int64
 	ComingUpDistanceLeft     int64
 	ComingUpSpeed            int64
 	ComingUpDeceleration     int64
@@ -320,7 +320,6 @@ func NewWorld(seed int64, l Level) (w World) {
 	w.CanonicalAdjustmentSpeed = 21
 	w.BrickFallAcceleration = 2
 	w.ComingUpDeceleration = 2
-	w.RegularCooldown = 738
 	w.ObstaclesBuffer = make([]Rectangle, NCols*NRows+4)
 	w.ColumnsBuffer = make([][]*Brick, NCols)
 	for i := range w.ColumnsBuffer {
@@ -354,14 +353,23 @@ func NewWorldFromPlaythrough(p Playthrough) (w World) {
 	return
 }
 
+func (w *World) ResetTimerCooldown() {
+	// The timer cooldown depends on the maximum brick value currently present
+	// on the board. The formula is 11.3 sec + 0.2 sec * maxValue. In terms of
+	// frames: 678 + 12 * maxValue
+	w.TimerCooldown = 678 + 12*w.CurrentMaxVal()
+	w.TimerCooldownIdx = w.TimerCooldown
+}
+
 func (w *World) Initialize() {
 	w.RSeed(w.Seed)
 	if len(w.OriginalBricks) == 0 {
 		w.CreateFirstRowsOfBricks()
-		w.RegularCooldownIdx = 0
+		w.ResetTimerCooldown()
+		w.TimerCooldownIdx = 0
 	} else {
 		w.Bricks = slices.Clone(w.OriginalBricks)
-		w.RegularCooldownIdx = w.RegularCooldown
+		w.ResetTimerCooldown()
 	}
 	w.SolvedFirstState = false
 	w.FirstComingUp = true
@@ -463,14 +471,14 @@ func (w *World) DetermineDraggedBrick(input PlayerInput) {
 }
 
 func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
-	w.RegularCooldownIdx--
-	if w.RegularCooldownIdx <= 0 {
+	w.TimerCooldownIdx--
+	if w.TimerCooldownIdx <= 0 {
 		w.State = ComingUp
 		return
 	}
 
 	if w.NoMoreMergesArePossible() {
-		w.RegularCooldownIdx = 0
+		w.TimerCooldownIdx = 0
 		w.State = ComingUp
 		return
 	}
@@ -864,7 +872,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 			w.CreateNewRowOfBricks(w.CurrentMaxVal() - 2)
 		}
 
-		w.RegularCooldownIdx = w.RegularCooldown
+		w.ResetTimerCooldown()
 	}
 
 	// In the last step, the speed might be higher than the distance left.
