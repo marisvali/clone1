@@ -371,8 +371,6 @@ func (w *World) Initialize() {
 }
 
 func (w *World) Step(input PlayerInput) {
-	w.Score++
-
 	// Reset the world.
 	if input.ResetWorld {
 		w.Initialize()
@@ -748,6 +746,9 @@ func (w *World) MergeBricks() {
 			brickToUpdate = b2
 			idxToRemove = i
 		}
+
+		// Update the score.
+		w.Score += brickToUpdate.Val
 
 		brickToUpdate.Val++
 
