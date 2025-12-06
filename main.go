@@ -58,7 +58,12 @@ const (
 	DebugCrash
 )
 
+type UserData struct {
+	BestScore int64 `yaml:"BestScore"`
+}
+
 type Gui struct {
+	UserData
 	layout              Pt
 	world               World
 	FSys                FS
@@ -99,10 +104,11 @@ type Gui struct {
 	slowdownFactor      int64       // 1 - does nothing, 2 - game is twice as slow etc
 	accumulatedInput    PlayerInput // only relevant for slowdownFactor > 1, see
 	// the implementation for a more detailed explanation
-	gameArea            Rectangle
-	horizontalDebugArea Rectangle
-	verticalDebugArea   Rectangle
-	bestScore           int64
+	gameArea              Rectangle
+	horizontalDebugArea   Rectangle
+	verticalDebugArea     Rectangle
+	username              string
+	uploadUserDataChannel chan UserData
 }
 
 type PointerState struct {
@@ -121,10 +127,18 @@ func main() {
 	g.playthrough.SimulationVersion = SimulationVersion
 	g.playthrough.ReleaseVersion = ReleaseVersion
 	g.recordingFile = "last-recording.clone1"
+	g.username = getUsername()
+	g.UserData = LoadUserData(g.username)
+	// A channel size of 10 means the channel will buffer 10 inputs before it is
+	// full and it blocks. Hopefully, when uploading data, a size of 10 is
+	// sufficient.
+	g.uploadUserDataChannel = make(chan UserData, 10)
+	go UploadUserData(g.username, g.uploadUserDataChannel)
 	g.FrameSkipAltArrow = 1
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
 	g.slowdownFactor = 1
+
 	g.state = PlayScreen
 	// g.state = DebugCrash
 	g.state = HomeScreen

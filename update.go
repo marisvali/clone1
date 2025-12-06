@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"gopkg.in/yaml.v3"
 	"slices"
 )
 
@@ -99,6 +100,13 @@ func (g *Gui) UpdatePlayScreen() {
 
 		// Step the world.
 		g.world.Step(g.accumulatedInput)
+
+		// Save best score if it got increased.
+		if g.world.Score > g.BestScore {
+			g.BestScore = g.world.Score
+			g.uploadUserDataChannel <- g.UserData
+		}
+
 		g.accumulatedInput = PlayerInput{}
 	}
 
@@ -337,4 +345,24 @@ func (g *Gui) GetPointerState() PointerState {
 	// is pressed.
 	x, y := ebiten.CursorPosition()
 	return PointerState{false, false, false, Pt{int64(x), int64(y)}}
+}
+
+func LoadUserData(username string) (data UserData) {
+	s := GetUserDataHttp(username)
+	err := yaml.Unmarshal([]byte(s), &data)
+	Check(err)
+	return
+}
+
+func UploadUserData(username string, ch chan UserData) {
+	for {
+		// Receive a struct from the channel.
+		// Blocks until a struct is received.
+		data := <-ch
+
+		// Upload the data.
+		bytes, err := yaml.Marshal(data)
+		Check(err)
+		SetUserDataHttp(username, string(bytes))
+	}
 }

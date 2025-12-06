@@ -12,9 +12,9 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 	// it with some background. Then, we select the area inside of screen on
 	// which we draw all the actually interesting elements of our gameScreen.
 	screen.Fill(color.NRGBA{
-		R: 180,
-		G: 180,
-		B: 180,
+		R: 255,
+		G: 255,
+		B: 255,
 		A: 255,
 	})
 
@@ -57,8 +57,7 @@ func (g *Gui) DrawHomeScreen(screen *ebiten.Image) {
 func (g *Gui) DrawPlayScreen(screen *ebiten.Image) {
 	DrawSpriteStretched(screen, g.imgScreenPlay)
 
-	g.bestScore = 14326
-	g.DrawScore(screen, g.bestScore, 444)
+	g.DrawScore(screen, g.BestScore, 444)
 	g.DrawScore(screen, g.world.Score, 886)
 
 	// Draw time left in orange.
