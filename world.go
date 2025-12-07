@@ -314,7 +314,7 @@ func (p *PlayerInput) EventOccurred() bool {
 
 func NewWorld(seed int64, l Level) (w World) {
 	// Set constants and buffers.
-	w.MaxBrickValue = 10
+	w.MaxBrickValue = 30
 	w.MaxInitialBrickValue = 5
 	w.DragSpeed = 100
 	w.CanonicalAdjustmentSpeed = 21
