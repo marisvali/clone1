@@ -124,7 +124,7 @@ func (g *Gui) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight
 
 	// Define the game area relative to the total screen area.
 	g.gameArea.Min.X = (int64(screenWidth) - gameWidth) / 2
-	g.gameArea.Min.Y = (int64(screenHeight) - gameHeight) / 2
+	g.gameArea.Min.Y = 0
 	g.gameArea.Max.X = g.gameArea.Min.X + GameWidth
 	g.gameArea.Max.Y = g.gameArea.Min.Y + GameHeight
 

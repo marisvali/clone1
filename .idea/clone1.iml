@@ -5,6 +5,7 @@
       <option name="customFlags">
         <array>
           <option value="assert_enabled" />
+          <option value="http_enabled" />
         </array>
       </option>
     </buildTags>
