@@ -95,7 +95,7 @@ func (g *Gui) UpdatePlayScreen() {
 			// IMPORTANT: save the playthrough before stepping the World. If
 			// a bug in the World causes it to crash, we want to save the input
 			// that caused the bug before the program crashes.
-			// WriteFile(g.recordingFile, g.playthrough.Serialize())
+			WriteFile(g.recordingFile, g.playthrough.Serialize())
 		}
 
 		// Step the world.

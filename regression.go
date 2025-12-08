@@ -11,7 +11,10 @@ import (
 // are considered "the same", even though they may be implemented differently.
 func (w *World) StateBytes() []byte {
 	// The world is "the same" if it has the same:
+	// - the same state
 	// - the same bricks at the same positions
+	// - the same timer idx
+	// - the same score
 	//
 	// Explanation:
 	//
@@ -68,6 +71,7 @@ func (w *World) StateBytes() []byte {
 	// current needs.
 
 	buf := new(bytes.Buffer)
+	Serialize(buf, w.State)
 	Serialize(buf, int64(len(w.Bricks)))
 	for _, b := range w.Bricks {
 		Serialize(buf, b.PixelPos)
@@ -75,6 +79,8 @@ func (w *World) StateBytes() []byte {
 		Serialize(buf, b.State)
 		Serialize(buf, b.FallingSpeed)
 	}
+	Serialize(buf, w.TimerCooldownIdx)
+	Serialize(buf, w.Score)
 	return buf.Bytes()
 }
 
