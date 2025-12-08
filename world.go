@@ -367,15 +367,16 @@ func (w *World) Initialize() {
 		w.CreateFirstRowsOfBricks()
 		w.ResetTimerCooldown()
 		w.TimerCooldownIdx = 0
+		w.SolvedFirstState = false
+		w.FirstComingUp = true
+		w.State = ComingUp
 	} else {
 		w.Bricks = slices.Clone(w.OriginalBricks)
 		w.ResetTimerCooldown()
+		w.SolvedFirstState = false
+		w.FirstComingUp = false
+		w.State = Regular
 	}
-	w.SolvedFirstState = false
-	w.FirstComingUp = true
-
-	w.PreviousState = ComingUp
-	w.State = ComingUp
 }
 
 func (w *World) Step(input PlayerInput) {
@@ -395,8 +396,8 @@ func (w *World) Step(input PlayerInput) {
 		w.SolvedFirstState = true
 	} else {
 		justEnteredState = w.State != w.PreviousState
-		w.PreviousState = w.State
 	}
+	w.PreviousState = w.State
 
 	// We want to register if the player clicked a brick or released an already
 	// dragged brick both during Regular play and during a ComingUp event.

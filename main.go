@@ -137,11 +137,11 @@ func main() {
 	g.FrameSkipAltArrow = 1
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
-	g.slowdownFactor = 1
 
+	g.slowdownFactor = 30
 	g.state = PlayScreen
 	// g.state = DebugCrash
-	g.state = HomeScreen
+	// g.state = HomeScreen
 	// g.state = Playback
 
 	if len(os.Args) == 2 {
@@ -164,7 +164,17 @@ func main() {
 		// results visually
 		CheckCrashes = false
 	}
-
+	//
+	// g.playthrough.BricksParams = []BrickParams{
+	// 	{Pt{0, 0}, 1},
+	// 	{Pt{0, 1}, 2},
+	// 	{Pt{0, 2}, 3},
+	// 	{Pt{0, 3}, 1},
+	// 	{Pt{0, 4}, 5},
+	// 	{Pt{0, 5}, 6},
+	// 	// {Pt{0, 6}, 7},
+	// 	{Pt{1, 0}, 10},
+	// }
 	g.world = NewWorldFromPlaythrough(g.playthrough)
 
 	// The last input caused the crash, so run the whole playthrough except the
