@@ -8,6 +8,10 @@ import (
 )
 
 func (g *Gui) Update() error {
+	if g.folderWatcher1.FolderContentsChanged() {
+		g.LoadGuiData()
+	}
+
 	g.pointer = g.GetPointerState()
 	g.pressedKeys = g.pressedKeys[:0]
 	g.pressedKeys = inpututil.AppendPressedKeys(g.pressedKeys)

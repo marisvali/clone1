@@ -138,7 +138,7 @@ func main() {
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
 
-	g.slowdownFactor = 30
+	g.slowdownFactor = 1
 	g.state = PlayScreen
 	// g.state = DebugCrash
 	// g.state = HomeScreen

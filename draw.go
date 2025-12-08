@@ -5,6 +5,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text"
 	"image/color"
+	"io/fs"
 )
 
 func (g *Gui) Draw(screen *ebiten.Image) {
@@ -257,7 +258,7 @@ func (g *Gui) LoadGuiData() {
 	// case we want to see an error in the developer console instead of a page
 	// that keeps trying to load and reports nothing.
 	previousVal := CheckCrashes
-	if g.FSys == nil {
+	if _, ok := g.FSys.(fs.FS); ok {
 		CheckCrashes = false
 	}
 	for {

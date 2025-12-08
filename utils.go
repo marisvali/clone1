@@ -29,9 +29,16 @@ func Check(e error) {
 
 func LoadImage(fsys FS, str string) *ebiten.Image {
 	file, err := fsys.Open(str)
-	defer func(file fs.File) { Check(file.Close()) }(file)
 	Check(err)
 
+	// If Check doesn't crash, return early otherwise file.Close might crash
+	// because of a null pointer access or image.Decode might crash because of
+	// an invalid binary content.
+	if err != nil {
+		return nil
+	}
+
+	defer func(file fs.File) { Check(file.Close()) }(file)
 	img, _, err := image.Decode(file)
 	Check(err)
 	if err != nil {
