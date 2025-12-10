@@ -104,6 +104,7 @@ func (g *Gui) UpdatePlayScreen() {
 
 		// Step the world.
 		g.world.Step(g.accumulatedInput)
+		g.visWorld.Step(&g.world)
 
 		// Save best score if it got increased.
 		if g.world.Score > g.BestScore {

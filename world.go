@@ -298,6 +298,7 @@ type World struct {
 	OriginalBricks           []Brick
 	FirstComingUp            bool
 	Score                    int64
+	JustMergedBricks         []*Brick
 }
 
 type PlayerInput struct {
@@ -380,6 +381,8 @@ func (w *World) Initialize() {
 }
 
 func (w *World) Step(input PlayerInput) {
+	w.JustMergedBricks = w.JustMergedBricks[:0]
+
 	// Reset the world.
 	if input.ResetWorld {
 		w.Initialize()
@@ -755,6 +758,7 @@ func (w *World) MergeBricks() {
 			brickToUpdate = b2
 			idxToRemove = i
 		}
+		w.JustMergedBricks = append(w.JustMergedBricks, brickToUpdate)
 
 		// Update the score.
 		w.Score += brickToUpdate.Val

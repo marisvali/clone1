@@ -64,6 +64,7 @@ type UserData struct {
 
 type Gui struct {
 	UserData
+	Animations
 	layout              Pt
 	world               World
 	FSys                FS
@@ -109,6 +110,7 @@ type Gui struct {
 	verticalDebugArea     Rectangle
 	username              string
 	uploadUserDataChannel chan UserData
+	visWorld              VisWorld
 }
 
 type PointerState struct {
@@ -116,6 +118,11 @@ type PointerState struct {
 	JustPressed  bool
 	JustReleased bool
 	Pos          Pt
+}
+
+type Animations struct {
+	animSplashRadial Animation
+	animSplashDown   Animation
 }
 
 func main() {

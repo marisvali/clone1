@@ -67,6 +67,11 @@ func (r *Rectangle) Height() int64 {
 	return r.Max.Y - r.Min.Y
 }
 
+func (r *Rectangle) Center() Pt {
+	Assert(r.Min.X <= r.Max.X && r.Min.Y <= r.Max.Y)
+	return Pt{(r.Min.X + r.Max.X) / 2, (r.Min.Y + r.Max.Y) / 2}
+}
+
 func (r *Rectangle) Size() Pt {
 	return Pt{r.Width(), r.Height()}
 }

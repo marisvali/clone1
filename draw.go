@@ -105,6 +105,15 @@ func (g *Gui) DrawPlayScreen(screen *ebiten.Image) {
 	g.DrawBricks(worldScreen, Dragged)
 	g.DrawBricks(worldScreen, Falling)
 
+	// Draw all temporary animations.
+	for _, o := range g.visWorld.Temporary {
+		DrawSprite(worldScreen, o.Animation.CurrentImg(),
+			float64(o.Pos.X)-SplashAnimationSize/2,
+			float64(o.Pos.Y)-SplashAnimationSize/2,
+			float64(SplashAnimationSize),
+			float64(SplashAnimationSize))
+	}
+
 	// Draw debugging info.
 	for _, pt := range g.world.DebugPts {
 		DrawPixel(screen, pt, color.NRGBA{
@@ -283,6 +292,8 @@ func (g *Gui) LoadGuiData() {
 		g.imgPausedScreen = LoadImage(g.FSys, "data/gui/screen-paused.png")
 		g.imgGameOverScreen = LoadImage(g.FSys, "data/gui/screen-game-over.png")
 		g.imgGameWonScreen = LoadImage(g.FSys, "data/gui/screen-game-won.png")
+		g.animSplashRadial = NewAnimation(g.FSys, "data/gui/splash-radial")
+		g.animSplashDown = NewAnimation(g.FSys, "data/gui/splash-down")
 
 		if CheckFailed == nil {
 			break
@@ -290,6 +301,7 @@ func (g *Gui) LoadGuiData() {
 	}
 	CheckCrashes = previousVal
 
+	g.visWorld = NewVisWorld(g.Animations)
 	g.UpdateWindowSize()
 }
 
