@@ -199,7 +199,7 @@ func (g *Gui) DrawDebugControlsHorizontal(screen *ebiten.Image) {
 	// Playback bar cursor.
 	cursorWidth := float64(debugPlayBar.Height())
 	cursorHeight := float64(debugPlayBar.Height())
-	factor := float64(g.frameIdx) / float64(len(g.playthrough.History))
+	factor := float64(g.frameIdx) / float64(len(g.playthrough.History)-1)
 	cursorX := factor*float64(debugPlayBar.Width()) - cursorWidth/2
 	DrawSprite(bar, g.imgPlaybackCursor, cursorX, 0, cursorWidth, cursorHeight)
 }

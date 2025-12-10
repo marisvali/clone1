@@ -561,7 +561,7 @@ func (w *World) UpdateFallingBricks() {
 		// Move the brick.
 		b.FallingSpeed += w.BrickFallAcceleration
 		hitObstacle := w.MoveBrick(b, b.PixelPos.Plus(Pt{0, 1000}),
-			b.FallingSpeed, StopAtFirstObstacleIncludingTop)
+			b.FallingSpeed, StopAtFirstObstacleExceptTop)
 		if hitObstacle {
 			// We hit something.
 			// The brick becomes canonical.
@@ -893,8 +893,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 		// Check if bricks went over the top.
 		for i := range w.Bricks {
 			b := &w.Bricks[i]
-			bottom := int64(PlayAreaHeight - BrickMarginPixelSize)
-			top := bottom - BrickPixelSize*NRows - BrickMarginPixelSize*(NRows-1)
+			top := int64(0)
 			brickTop := w.Bricks[i].Bounds.Min.Y
 
 			if brickTop >= top {
@@ -996,7 +995,6 @@ type MoveType int64
 
 const (
 	IgnoreObstacles MoveType = iota
-	StopAtFirstObstacleIncludingTop
 	StopAtFirstObstacleExceptTop
 	SlideOnObstacles
 )
@@ -1013,14 +1011,6 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 		pts := GetLinePoints(b.PixelPos, targetPos, nMaxPixels)
 		b.SetPixelPos(pts[len(pts)-1], w)
 		return false
-	}
-
-	if moveType == StopAtFirstObstacleIncludingTop {
-		obstacles := w.GetObstacles(b, IncludingTop)
-		newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels,
-			obstacles)
-		b.SetPixelPos(newR.Min, w)
-		return nPixelsLeft > 0
 	}
 
 	if moveType == StopAtFirstObstacleExceptTop {
