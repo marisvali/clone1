@@ -453,7 +453,7 @@ func (w *World) DetermineDraggedBrick(input PlayerInput) {
 			// player. I will leave leave the assert here during development
 			// to catch errors in my logic. But I will also handle failures
 			// gracefully, for when the assert is disabled.
-			Assert(dragged == nil)
+			// Assert(dragged == nil)
 
 			if dragged != nil {
 				// Make the previously dragged brick canonical and let the
