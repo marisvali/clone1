@@ -20,9 +20,9 @@ import (
 // ReleaseVersion must change when SimulationVersion or InputVersion change.
 // But there are many reasons for ReleaseVersion to change when the simulation
 // stays the same and the input format stays the same:
-// - the executable uses randomly generated levels or fixed levels
-// - different fixed levels are included in the executable
 // - communication with the server is enabled or disabled
+// - asserts are enabled or disabled
+// - writing to the disk is enabled or disabled
 // - graphics change
 // All of these changes can be handled by having a generic code that is compiled
 // once and depends on a configuration. I very intentionally do not do this.

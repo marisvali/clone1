@@ -12,8 +12,10 @@ import (
 // The simulation is an abstract mapping between input given by the player and
 // output received by the player. The input usually consists of mouse positions
 // and clicks. The output depends on the current design of the simulation but
-// can be things like, the position and health of the player and the enemies
-// and the visible regions the player can jump to.
+// can be things like, the positions of objects (player character, enemies,
+// terrain, blocks etc), the status of the objects (health, ammo, state etc),
+// the game's status (e.g. score) and whatever else is relevant for the player's
+// experience.
 // The implementation is not relevant for the SimulationVersion. The
 // calculations to go from input to output can change. The exact structs for
 // the input and output can change (e.g. int64 changes to int32). As long as
