@@ -172,17 +172,18 @@ func main() {
 		CheckCrashes = false
 	}
 	//
-	// g.playthrough.BricksParams = []BrickParams{
-	// 	{Pt{0, 0}, 1},
-	// 	{Pt{0, 1}, 2},
-	// 	{Pt{0, 2}, 3},
-	// 	{Pt{0, 3}, 1},
-	// 	{Pt{0, 4}, 5},
-	// 	{Pt{0, 5}, 6},
-	// 	// {Pt{0, 6}, 7},
-	// 	{Pt{1, 0}, 10},
-	// }
+	g.playthrough.BricksParams = []BrickParams{
+		{Pt{0, 0}, 1},
+		{Pt{0, 1}, 2},
+		{Pt{5, 0}, 3},
+		{Pt{1, 0}, 4},
+		{Pt{2, 0}, 5},
+		{Pt{3, 0}, 6},
+		{Pt{3, 1}, 7},
+	}
 	g.world = NewWorldFromPlaythrough(g.playthrough)
+	ChainBricks(&g.world.Bricks[0], &g.world.Bricks[1])
+	ChainBricks(&g.world.Bricks[3], &g.world.Bricks[4])
 
 	// The last input caused the crash, so run the whole playthrough except the
 	// last input. This gives me a chance to see the current state of the world

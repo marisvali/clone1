@@ -104,6 +104,7 @@ func (g *Gui) DrawPlayScreen(screen *ebiten.Image) {
 	g.DrawBricks(worldScreen, Canonical)
 	g.DrawBricks(worldScreen, Dragged)
 	g.DrawBricks(worldScreen, Falling)
+	g.DrawBricks(worldScreen, Follower)
 
 	// Draw all temporary animations.
 	for _, o := range g.visWorld.Temporary {
@@ -223,6 +224,19 @@ func (g *Gui) DrawBricks(worldScreen *ebiten.Image, s BrickState) {
 		DrawSprite(worldScreen, img, float64(pos.X), float64(pos.Y),
 			float64(BrickPixelSize),
 			float64(BrickPixelSize))
+		if b.ChainedTo != nil {
+			c1 := b.Bounds.Center()
+			c2 := b.ChainedTo.Bounds.Center()
+			line := GetLinePoints(c1, c2, 1000)
+			for _, pt := range line {
+				DrawPixel(worldScreen, pt, color.NRGBA{
+					R: 255,
+					G: 255,
+					B: 0,
+					A: 255,
+				})
+			}
+		}
 	}
 }
 
