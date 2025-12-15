@@ -481,13 +481,13 @@ func (w *World) DetermineDraggedBrick(input PlayerInput) {
 				dragged.State = Canonical
 			}
 
-			w.DraggingOffset = closest.PixelPos.Minus(input.Pos)
 			if closest.State == Follower {
 				dragged = closest.ChainedTo
 			} else {
 				dragged = closest
 			}
 			dragged.State = Dragged
+			w.DraggingOffset = ExtendedBrickBounds(dragged).Min.Minus(input.Pos)
 		}
 	}
 
@@ -500,17 +500,17 @@ func (w *World) DetermineDraggedBrick(input PlayerInput) {
 }
 
 func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
-	w.TimerCooldownIdx--
-	if w.TimerCooldownIdx <= 0 {
-		w.State = ComingUp
-		return
-	}
-
-	if w.NoMoreMergesArePossible() {
-		w.TimerCooldownIdx = 0
-		w.State = ComingUp
-		return
-	}
+	// w.TimerCooldownIdx--
+	// if w.TimerCooldownIdx <= 0 {
+	// 	w.State = ComingUp
+	// 	return
+	// }
+	//
+	// if w.NoMoreMergesArePossible() {
+	// 	w.TimerCooldownIdx = 0
+	// 	w.State = ComingUp
+	// 	return
+	// }
 
 	w.UpdateDraggedBrick(input)
 	w.UpdateFallingBricks()

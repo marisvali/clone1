@@ -180,6 +180,9 @@ func main() {
 		{Pt{2, 0}, 5},
 		{Pt{3, 0}, 6},
 		{Pt{3, 1}, 7},
+		{Pt{3, 2}, 8},
+		{Pt{4, 0}, 8},
+		{Pt{5, 1}, 8},
 	}
 	g.world = NewWorldFromPlaythrough(g.playthrough)
 	ChainBricks(&g.world.Bricks[0], &g.world.Bricks[1])
