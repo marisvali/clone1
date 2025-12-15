@@ -343,6 +343,10 @@ func NewWorld(seed int64, l Level) (w World) {
 		w.ColumnsBuffer[i] = make([]*Brick, NRows)
 	}
 	w.SlotsBuffer = NewMat(Pt{NCols, NRows})
+	// Should never resize, in fact resizing is an error, in fact:
+	// TODO: rethink having ChainedTo be a pointer between frames, since it can get invalidated by something like a reallocation, seems fickle
+	// WARNING: it can also get invalidated by something like w.Bricks = slices.Clone(..)
+	w.Bricks = make([]Brick, 0, NCols*(NRows+1))
 
 	// Transform Level parameters into the World's initial state.
 	w.Seed = seed
@@ -400,7 +404,9 @@ func (w *World) Initialize() {
 		w.FirstComingUp = true
 		w.State = ComingUp
 	} else {
-		w.Bricks = slices.Clone(w.OriginalBricks)
+		for _, b := range w.OriginalBricks {
+			w.Bricks = append(w.Bricks, b)
+		}
 		for _, c := range w.OriginalChains {
 			ChainBricks(&w.Bricks[c.Brick1], &w.Bricks[c.Brick2])
 		}
@@ -533,20 +539,20 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 	// should never intersect" is no longer a valid invariant to check against.
 	//
 	// Check if bricks intersect each other or are out of bounds.
-	{
-		for i := range w.Bricks {
-			obstacles := w.GetObstacles(&w.Bricks[i], IncludingTop)
-			brick := BrickBounds(w.Bricks[i].PixelPos)
-			// Don't use RectIntersectsRects because I want to be able to
-			// put a breakpoint here and see which rect intersects which.
-			for j := range obstacles {
-				if brick.Intersects(obstacles[j]) {
-					Check(fmt.Errorf("solids intersect each other"))
-					w.AssertionFailed = true
-				}
-			}
-		}
-	}
+	// {
+	// 	for i := range w.Bricks {
+	// 		obstacles := w.GetObstacles(&w.Bricks[i], IncludingTop)
+	// 		brick := BrickBounds(w.Bricks[i].PixelPos)
+	// 		// Don't use RectIntersectsRects because I want to be able to
+	// 		// put a breakpoint here and see which rect intersects which.
+	// 		for j := range obstacles {
+	// 			if brick.Intersects(obstacles[j]) {
+	// 				Check(fmt.Errorf("solids intersect each other"))
+	// 				w.AssertionFailed = true
+	// 			}
+	// 		}
+	// 	}
+	// }
 }
 
 func (w *World) NoMoreMergesArePossible() bool {
@@ -645,6 +651,21 @@ func (w *World) MarkFallingBricks() {
 			continue
 		}
 
+		// Skip bricks which currently intersect other bricks.
+		bounds := ExtendedBrickBounds(b)
+		intersects := false
+		for j := range w.Bricks {
+			// TODO: fix bugs in this function, it should allow for a brick to intersect the chained brick if they are of the same value
+			if i != j && b.Val != w.Bricks[j].Val && (b.ChainedTo == nil ||
+				&w.Bricks[j] != b.ChainedTo) && w.Bricks[j].Bounds.Intersects(bounds) {
+				intersects = true
+				break
+			}
+		}
+		if intersects {
+			continue
+		}
+
 		// Check if there's anything under this brick.
 		canPosUnder := b.CanonicalPos
 		canPosUnder.Y--
@@ -663,7 +684,7 @@ func (w *World) MarkFallingBricks() {
 		}
 
 		// Check if any bricks intersect the slot.
-		intersects := false
+		intersects = false
 		for j := range w.Bricks {
 			if i != j && b.Val != w.Bricks[j].Val &&
 				w.Bricks[j].Bounds.Intersects(slot) {
@@ -971,6 +992,10 @@ func (w *World) StepComingUp(justEnteredState bool) {
 	for i := range w.Bricks {
 		newPos := w.Bricks[i].PixelPos
 		newPos.Y -= w.ComingUpSpeed
+		if w.Bricks[i].State == Follower {
+			// Skip follower bricks otherwise they get moved twice.
+			continue
+		}
 		w.Bricks[i].SetPixelPos(newPos, w)
 	}
 	w.ComingUpDistanceLeft -= w.ComingUpSpeed
