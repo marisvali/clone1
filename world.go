@@ -699,6 +699,8 @@ func (w *World) MarkFallingBricks() {
 	}
 }
 
+var bricksBuffer []*Brick = make([]*Brick, 0, NCols*(NRows+1))
+
 func (w *World) UpdateCanonicalBricks() {
 	w.MarkFallingBricks()
 
@@ -729,11 +731,8 @@ func (w *World) UpdateCanonicalBricks() {
 	// that feels natural.
 	//
 	// Assign each brick to a column.
-	columns := w.ColumnsBuffer
-	for i := range columns {
-		columns[i] = w.ColumnsBuffer[i][:0]
-	}
 
+	bricks := bricksBuffer[:0]
 	for i := range w.Bricks {
 		b := &w.Bricks[i]
 
@@ -742,74 +741,75 @@ func (w *World) UpdateCanonicalBricks() {
 			continue
 		}
 
-		// Possible assert: the column is valid.
-		Assert(b.CanonicalPos.X >= 0 && b.CanonicalPos.X < int64(len(columns)))
-		columns[b.CanonicalPos.X] = append(columns[b.CanonicalPos.X], b)
+		bricks = append(bricks, b)
 	}
+
+	// Sort bricks in the column by their Y position, so that we can iterate
+	// through bricks from bottom to top.
+	slices.SortStableFunc(bricks, func(b1, b2 *Brick) int {
+		if b2.PixelPos.Y != b1.PixelPos.Y {
+			// Bigger Y has priority (must appear first in the list).
+			return cmp.Compare(b2.PixelPos.Y, b1.PixelPos.Y)
+		} else {
+			// Smaller X has priority (must appear first in the list).
+			return cmp.Compare(b1.PixelPos.X, b2.PixelPos.X)
+		}
+	})
 
 	slots := w.SlotsBuffer
 	slots.Reset()
 
-	// Go column by column.
-	for _, column := range columns {
-		// Sort bricks in the column by their Y position, so that we can iterate
-		// through bricks from bottom to top.
-		slices.SortFunc(column, func(b1, b2 *Brick) int {
-			return cmp.Compare(b2.PixelPos.Y, b1.PixelPos.Y)
-		})
+	for _, b := range bricks {
+		// We need to find a position for b, in this column.
+		// We start off from b's current position.
+		targetCanPos := b.CanonicalPos
+		var chainedTargetCanPos Pt
 
-		for _, b := range column {
-			// We need to find a position for b, in this column.
-			// We start off from b's current position.
-			targetCanPos := b.CanonicalPos
-			var chainedTargetCanPos Pt
-
-			// Find an unoccupied position.
-			for {
-				occupied := false
-				b2 := slots.Get(targetCanPos)
-				if b2 != nil && b2.Val != b.Val {
+		// Find an unoccupied position.
+		for {
+			occupied := false
+			b2 := slots.Get(targetCanPos)
+			if b2 != nil && b2.Val != b.Val {
+				// The position is already occupied by another brick of a
+				// different value.
+				occupied = true
+			}
+			if b.ChainedTo != nil {
+				if b.ChainedTo.CanonicalPos.X == b.CanonicalPos.X+1 {
+					// to the right
+					chainedTargetCanPos = Pt{targetCanPos.X + 1, targetCanPos.Y}
+				}
+				if b.ChainedTo.CanonicalPos.Y == b.CanonicalPos.Y+1 {
+					// above
+					chainedTargetCanPos = Pt{targetCanPos.X, targetCanPos.Y + 1}
+				}
+				b2 = slots.Get(chainedTargetCanPos)
+				if b2 != nil && b2.Val != b.ChainedTo.Val {
 					// The position is already occupied by another brick of a
 					// different value.
 					occupied = true
 				}
-				if b.ChainedTo != nil {
-					if b.ChainedTo.CanonicalPos.X == b.CanonicalPos.X+1 {
-						// to the right
-						chainedTargetCanPos = Pt{targetCanPos.X + 1, targetCanPos.Y}
-					}
-					if b.ChainedTo.CanonicalPos.Y == b.CanonicalPos.Y+1 {
-						// above
-						chainedTargetCanPos = Pt{targetCanPos.X, targetCanPos.Y + 1}
-					}
-					b2 = slots.Get(chainedTargetCanPos)
-					if b2 != nil && b2.Val != b.ChainedTo.Val {
-						// The position is already occupied by another brick of a
-						// different value.
-						occupied = true
-					}
-				}
-
-				if occupied {
-					targetCanPos.Y++
-				} else {
-					break
-				}
 			}
 
-			slots.Set(targetCanPos, b)
-			targetPos := w.CanonicalPosToPixelPos(targetCanPos)
-
-			// Go towards the target pos, without considering any obstacles.
-			w.MoveBrick(b, targetPos, w.CanonicalAdjustmentSpeed,
-				IgnoreObstacles)
-
-			// If we just decided the position of a brick and it is chained to
-			// another brick, we also decided the position of the second brick.
-			if b.ChainedTo != nil {
-				Assert(b.ChainedTo.State == Follower)
-				slots.Set(chainedTargetCanPos, b.ChainedTo)
+			if occupied {
+				targetCanPos.Y++
+			} else {
+				break
 			}
+		}
+
+		slots.Set(targetCanPos, b)
+		targetPos := w.CanonicalPosToPixelPos(targetCanPos)
+
+		// Go towards the target pos, without considering any obstacles.
+		w.MoveBrick(b, targetPos, w.CanonicalAdjustmentSpeed,
+			IgnoreObstacles)
+
+		// If we just decided the position of a brick and it is chained to
+		// another brick, we also decided the position of the second brick.
+		if b.ChainedTo != nil {
+			Assert(b.ChainedTo.State == Follower)
+			slots.Set(chainedTargetCanPos, b.ChainedTo)
 		}
 	}
 }
