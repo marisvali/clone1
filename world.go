@@ -500,17 +500,17 @@ func (w *World) DetermineDraggedBrick(input PlayerInput) {
 }
 
 func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
-	// w.TimerCooldownIdx--
-	// if w.TimerCooldownIdx <= 0 {
-	// 	w.State = ComingUp
-	// 	return
-	// }
-	//
-	// if w.NoMoreMergesArePossible() {
-	// 	w.TimerCooldownIdx = 0
-	// 	w.State = ComingUp
-	// 	return
-	// }
+	w.TimerCooldownIdx--
+	if w.TimerCooldownIdx <= 0 {
+		w.State = ComingUp
+		return
+	}
+
+	if w.NoMoreMergesArePossible() {
+		w.TimerCooldownIdx = 0
+		w.State = ComingUp
+		return
+	}
 
 	w.UpdateDraggedBrick(input)
 	w.UpdateFallingBricks()
@@ -1125,14 +1125,14 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 		newR, nMaxPixels = MoveRect(r, targetPos, nMaxPixels, obstacles)
 
 		// Now, go towards the target's X as much as possible.
-		newR, nMaxPixels = MoveRect(newR, Pt{targetPos.X, r.Min.Y}, nMaxPixels,
-			obstacles)
+		newR, nMaxPixels = MoveRect(newR, Pt{targetPos.X, newR.Min.Y},
+			nMaxPixels, obstacles)
 
 		// Now, go towards the target's Y as much as possible.
-		newR, nMaxPixels = MoveRect(r, Pt{r.Min.X, targetPos.Y}, nMaxPixels,
-			obstacles)
+		newR, nMaxPixels = MoveRect(newR, Pt{newR.Min.X, targetPos.Y},
+			nMaxPixels, obstacles)
 
-		dif := r.Min.Minus(newR.Min)
+		dif := newR.Min.Minus(r.Min)
 		b.SetPixelPos(b.PixelPos.Plus(dif), w)
 		return true
 	}
