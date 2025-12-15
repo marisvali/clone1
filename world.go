@@ -307,7 +307,7 @@ type World struct {
 	FirstComingUp            bool
 	Score                    int64
 	JustMergedBricks         []*Brick
-	MatrixBuffer             Mat
+	SlotsBuffer              Mat
 }
 
 type PlayerInput struct {
@@ -335,7 +335,7 @@ func NewWorld(seed int64, l Level) (w World) {
 	for i := range w.ColumnsBuffer {
 		w.ColumnsBuffer[i] = make([]*Brick, NRows)
 	}
-	w.MatrixBuffer = NewMat(Pt{NCols, NRows})
+	w.SlotsBuffer = NewMat(Pt{NCols, NRows})
 
 	// Transform Level parameters into the World's initial state.
 	w.Seed = seed
@@ -645,7 +645,7 @@ func (w *World) MarkFallingBricks() {
 		// Get the slot underneath the brick.
 		slot := BrickBounds(w.CanonicalPosToPixelPos(canPosUnder))
 
-		// Extend slot with child's slot if necessary.
+		// Extend slot with follower's slot if necessary.
 		if b.ChainedTo != nil && b.ChainedTo.CanonicalPos.X == b.CanonicalPos.X+1 {
 			slot2 := BrickBounds(w.CanonicalPosToPixelPos(Pt{canPosUnder.X + 1, canPosUnder.Y}))
 			slot.Max = slot2.Max
@@ -715,7 +715,8 @@ func (w *World) UpdateCanonicalBricks() {
 		columns[b.CanonicalPos.X] = append(columns[b.CanonicalPos.X], b)
 	}
 
-	w.MatrixBuffer.Reset()
+	slots := w.SlotsBuffer
+	slots.Reset()
 
 	// Go column by column.
 	for _, column := range columns {
@@ -732,7 +733,7 @@ func (w *World) UpdateCanonicalBricks() {
 
 			// Find an unoccupied position.
 			for {
-				b2 := w.MatrixBuffer.Get(targetCanPos)
+				b2 := slots.Get(targetCanPos)
 				if b2 != nil && b2.Val != b.Val {
 					// The position is already occupied by another brick of a
 					// different value.
@@ -742,7 +743,7 @@ func (w *World) UpdateCanonicalBricks() {
 				}
 			}
 
-			w.MatrixBuffer.Set(targetCanPos, b)
+			slots.Set(targetCanPos, b)
 			targetPos := w.CanonicalPosToPixelPos(targetCanPos)
 
 			// Go towards the target pos, without considering any obstacles.
@@ -756,12 +757,12 @@ func (w *World) UpdateCanonicalBricks() {
 				if b.ChainedTo.CanonicalPos.X == b.CanonicalPos.X+1 {
 					// to the right
 					chainedTargetCanPos := Pt{targetCanPos.X + 1, targetCanPos.Y}
-					w.MatrixBuffer.Set(chainedTargetCanPos, b.ChainedTo)
+					slots.Set(chainedTargetCanPos, b.ChainedTo)
 				}
 				if b.ChainedTo.CanonicalPos.Y == b.CanonicalPos.Y+1 {
 					// above
 					chainedTargetCanPos := Pt{targetCanPos.X, targetCanPos.Y + 1}
-					w.MatrixBuffer.Set(chainedTargetCanPos, b.ChainedTo)
+					slots.Set(chainedTargetCanPos, b.ChainedTo)
 				}
 			}
 		}
