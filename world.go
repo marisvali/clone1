@@ -517,17 +517,17 @@ func (w *World) DetermineDraggedBrick(input PlayerInput) {
 }
 
 func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
-	// w.TimerCooldownIdx--
-	// if w.TimerCooldownIdx <= 0 {
-	// 	w.State = ComingUp
-	// 	return
-	// }
-	//
-	// if w.NoMoreMergesArePossible() {
-	// 	w.TimerCooldownIdx = 0
-	// 	w.State = ComingUp
-	// 	return
-	// }
+	w.TimerCooldownIdx--
+	if w.TimerCooldownIdx <= 0 {
+		w.State = ComingUp
+		return
+	}
+
+	if w.NoMoreMergesArePossible() {
+		w.TimerCooldownIdx = 0
+		w.State = ComingUp
+		return
+	}
 
 	w.UpdateDraggedBrick(input)
 	w.UpdateFallingBricks()
@@ -732,21 +732,8 @@ func (w *World) UpdateCanonicalBricks() {
 	//
 	// Assign each brick to a column.
 
-	bricks := bricksBuffer[:0]
-	for i := range w.Bricks {
-		b := &w.Bricks[i]
-
-		// Skip non-canonical bricks.
-		if b.State != Canonical {
-			continue
-		}
-
-		bricks = append(bricks, b)
-	}
-
-	// Sort bricks in the column by their Y position, so that we can iterate
-	// through bricks from bottom to top.
-	slices.SortStableFunc(bricks, func(b1, b2 *Brick) int {
+	// Sort bricks.
+	slices.SortStableFunc(w.Bricks, func(b1, b2 Brick) int {
 		if b2.PixelPos.Y != b1.PixelPos.Y {
 			// Bigger Y has priority (must appear first in the list).
 			return cmp.Compare(b2.PixelPos.Y, b1.PixelPos.Y)
@@ -759,7 +746,12 @@ func (w *World) UpdateCanonicalBricks() {
 	slots := w.SlotsBuffer
 	slots.Reset()
 
-	for _, b := range bricks {
+	for i := range w.Bricks {
+		b := &w.Bricks[i]
+		if b.State != Canonical {
+			continue
+		}
+
 		// We need to find a position for b, in this column.
 		// We start off from b's current position.
 		targetCanPos := b.CanonicalPos
