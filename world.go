@@ -227,8 +227,14 @@ type BrickParams struct {
 	Val int64
 }
 
+type ChainParams struct {
+	Brick1 int64
+	Brick2 int64
+}
+
 type Level struct {
 	BricksParams []BrickParams
+	ChainsParams []ChainParams
 }
 
 type Brick struct {
@@ -304,6 +310,7 @@ type World struct {
 	ObstaclesBuffer          []Rectangle
 	ColumnsBuffer            [][]*Brick
 	OriginalBricks           []Brick
+	OriginalChains           []ChainParams
 	FirstComingUp            bool
 	Score                    int64
 	JustMergedBricks         []*Brick
@@ -345,6 +352,7 @@ func NewWorld(seed int64, l Level) (w World) {
 			l.BricksParams[i].Val,
 			&w))
 	}
+	w.OriginalChains = slices.Clone(l.ChainsParams)
 
 	w.Initialize()
 	return w
@@ -393,6 +401,9 @@ func (w *World) Initialize() {
 		w.State = ComingUp
 	} else {
 		w.Bricks = slices.Clone(w.OriginalBricks)
+		for _, c := range w.OriginalChains {
+			ChainBricks(&w.Bricks[c.Brick1], &w.Bricks[c.Brick2])
+		}
 		w.ResetTimerCooldown()
 		w.SolvedFirstState = false
 		w.FirstComingUp = false
@@ -522,20 +533,20 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 	// should never intersect" is no longer a valid invariant to check against.
 	//
 	// Check if bricks intersect each other or are out of bounds.
-	// {
-	// 	for i := range w.BricksParams {
-	// 		obstacles := w.GetObstacles(&w.BricksParams[i], IncludingTop)
-	// 		brick := w.BrickBounds(w.BricksParams[i].PixelPos)
-	// 		// Don't use RectIntersectsRects because I want to be able to
-	// 		// put a breakpoint here and see which rect intersects which.
-	// 		for j := range obstacles {
-	// 			if brick.Intersects(obstacles[j]) {
-	// 				// Check(fmt.Errorf("solids intersect each other"))
-	// 				w.AssertionFailed = true
-	// 			}
-	// 		}
-	// 	}
-	// }
+	{
+		for i := range w.Bricks {
+			obstacles := w.GetObstacles(&w.Bricks[i], IncludingTop)
+			brick := BrickBounds(w.Bricks[i].PixelPos)
+			// Don't use RectIntersectsRects because I want to be able to
+			// put a breakpoint here and see which rect intersects which.
+			for j := range obstacles {
+				if brick.Intersects(obstacles[j]) {
+					Check(fmt.Errorf("solids intersect each other"))
+					w.AssertionFailed = true
+				}
+			}
+		}
+	}
 }
 
 func (w *World) NoMoreMergesArePossible() bool {
@@ -730,13 +741,35 @@ func (w *World) UpdateCanonicalBricks() {
 			// We need to find a position for b, in this column.
 			// We start off from b's current position.
 			targetCanPos := b.CanonicalPos
+			var chainedTargetCanPos Pt
 
 			// Find an unoccupied position.
 			for {
+				occupied := false
 				b2 := slots.Get(targetCanPos)
 				if b2 != nil && b2.Val != b.Val {
 					// The position is already occupied by another brick of a
 					// different value.
+					occupied = true
+				}
+				if b.ChainedTo != nil {
+					if b.ChainedTo.CanonicalPos.X == b.CanonicalPos.X+1 {
+						// to the right
+						chainedTargetCanPos = Pt{targetCanPos.X + 1, targetCanPos.Y}
+					}
+					if b.ChainedTo.CanonicalPos.Y == b.CanonicalPos.Y+1 {
+						// above
+						chainedTargetCanPos = Pt{targetCanPos.X, targetCanPos.Y + 1}
+					}
+					b2 = slots.Get(chainedTargetCanPos)
+					if b2 != nil && b2.Val != b.ChainedTo.Val {
+						// The position is already occupied by another brick of a
+						// different value.
+						occupied = true
+					}
+				}
+
+				if occupied {
 					targetCanPos.Y++
 				} else {
 					break
@@ -754,16 +787,7 @@ func (w *World) UpdateCanonicalBricks() {
 			// another brick, we also decided the position of the second brick.
 			if b.ChainedTo != nil {
 				Assert(b.ChainedTo.State == Follower)
-				if b.ChainedTo.CanonicalPos.X == b.CanonicalPos.X+1 {
-					// to the right
-					chainedTargetCanPos := Pt{targetCanPos.X + 1, targetCanPos.Y}
-					slots.Set(chainedTargetCanPos, b.ChainedTo)
-				}
-				if b.ChainedTo.CanonicalPos.Y == b.CanonicalPos.Y+1 {
-					// above
-					chainedTargetCanPos := Pt{targetCanPos.X, targetCanPos.Y + 1}
-					slots.Set(chainedTargetCanPos, b.ChainedTo)
-				}
+				slots.Set(chainedTargetCanPos, b.ChainedTo)
 			}
 		}
 	}

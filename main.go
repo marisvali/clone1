@@ -145,9 +145,9 @@ func main() {
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
 
-	g.slowdownFactor = 1
+	g.slowdownFactor = 10
 	g.state = PlayScreen
-	// g.state = DebugCrash
+	g.state = DebugCrash
 	// g.state = HomeScreen
 	// g.state = Playback
 
@@ -184,9 +184,11 @@ func main() {
 		{Pt{4, 0}, 8},
 		{Pt{5, 1}, 8},
 	}
+	g.playthrough.ChainsParams = []ChainParams{
+		{0, 1},
+		{3, 4},
+	}
 	g.world = NewWorldFromPlaythrough(g.playthrough)
-	ChainBricks(&g.world.Bricks[0], &g.world.Bricks[1])
-	ChainBricks(&g.world.Bricks[3], &g.world.Bricks[4])
 
 	// The last input caused the crash, so run the whole playthrough except the
 	// last input. This gives me a chance to see the current state of the world
