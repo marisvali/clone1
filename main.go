@@ -172,22 +172,22 @@ func main() {
 		CheckCrashes = false
 	}
 	//
-	// g.playthrough.BricksParams = []BrickParams{
-	// 	{Pt{0, 0}, 1},
-	// 	{Pt{0, 1}, 2},
-	// 	{Pt{5, 0}, 3},
-	// 	{Pt{1, 0}, 4},
-	// 	{Pt{2, 0}, 5},
-	// 	{Pt{3, 0}, 6},
-	// 	{Pt{3, 1}, 7},
-	// 	{Pt{3, 2}, 8},
-	// 	{Pt{4, 0}, 8},
-	// 	{Pt{5, 1}, 8},
-	// }
-	// g.playthrough.ChainsParams = []ChainParams{
-	// 	{0, 1},
-	// 	{3, 4},
-	// }
+	g.playthrough.BricksParams = []BrickParams{
+		{Pt{0, 0}, 1},
+		{Pt{0, 1}, 2},
+		{Pt{5, 0}, 3},
+		{Pt{1, 0}, 4},
+		{Pt{2, 0}, 5},
+		{Pt{3, 0}, 6},
+		{Pt{3, 1}, 7},
+		{Pt{3, 2}, 8},
+		{Pt{4, 0}, 8},
+		{Pt{5, 1}, 8},
+	}
+	g.playthrough.ChainsParams = []ChainParams{
+		{0, 1},
+		{3, 4},
+	}
 	g.world = NewWorldFromPlaythrough(g.playthrough)
 
 	// The last input caused the crash, so run the whole playthrough except the
