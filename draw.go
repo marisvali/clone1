@@ -5,7 +5,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text"
 	"image/color"
-	"io/fs"
 )
 
 func (g *Gui) Draw(screen *ebiten.Image) {
@@ -276,56 +275,6 @@ func (g *Gui) DrawText(screen *ebiten.Image, message string, centerX bool, cente
 	textX := screen.Bounds().Min.X + offsetX
 	textY := screen.Bounds().Max.Y - offsetY - textSize.Max.Y
 	text.Draw(screen, message, g.defaultFont, textX, textY, color)
-}
-
-func (g *Gui) LoadGuiData() {
-	// Read from the disk over and over until a full read is possible.
-	// This repetition is meant to avoid crashes due to reading files
-	// while they are still being written.
-	// It's a hack but possibly a quick and very useful one.
-	// This repeated reading is only useful when we're not reading from the
-	// embedded filesystem. When we're reading from the embedded filesystem we
-	// want to crash as soon as possible. We might be in the browser, in which
-	// case we want to see an error in the developer console instead of a page
-	// that keeps trying to load and reports nothing.
-	previousVal := CheckCrashes
-	if _, ok := g.FSys.(fs.FS); ok {
-		CheckCrashes = false
-	}
-	for {
-		CheckFailed = nil
-		g.imgBlank = LoadImage(g.FSys, "data/gui/blank.png")
-		for i := int64(1); i <= g.world.MaxBrickValue; i++ {
-			filename := fmt.Sprintf("data/gui/%02d.png", i)
-			g.imgBrick[i] = LoadImage(g.FSys, filename)
-		}
-		for i := int64(0); i <= 9; i++ {
-			filename := fmt.Sprintf("data/gui/digit%d.png", i)
-			g.imgDigit[i] = LoadImage(g.FSys, filename)
-		}
-		g.imgCursor = LoadImage(g.FSys, "data/gui/cursor.png")
-		g.imgPlaybackCursor = LoadImage(g.FSys, "data/gui/playback-cursor.png")
-		g.imgPlaybackPause = LoadImage(g.FSys, "data/gui/playback-pause.png")
-		g.imgPlaybackPlay = LoadImage(g.FSys, "data/gui/playback-play.png")
-		g.imgPlayBar = LoadImage(g.FSys, "data/gui/playbar.png")
-		g.imgTimer = LoadImage(g.FSys, "data/gui/timer.png")
-		g.imgHomeScreen = LoadImage(g.FSys, "data/gui/screen-home.png")
-		g.imgScreenPlay = LoadImage(g.FSys, "data/gui/screen-play.png")
-		g.imgPausedScreen = LoadImage(g.FSys, "data/gui/screen-paused.png")
-		g.imgGameOverScreen = LoadImage(g.FSys, "data/gui/screen-game-over.png")
-		g.imgGameWonScreen = LoadImage(g.FSys, "data/gui/screen-game-won.png")
-		g.imgChain = LoadImage(g.FSys, "data/gui/chain.png")
-		g.animSplashRadial = NewAnimation(g.FSys, "data/gui/splash-radial")
-		g.animSplashDown = NewAnimation(g.FSys, "data/gui/splash-down")
-
-		if CheckFailed == nil {
-			break
-		}
-	}
-	CheckCrashes = previousVal
-
-	g.visWorld = NewVisWorld(g.Animations)
-	g.UpdateWindowSize()
 }
 
 func (g *Gui) UpdateWindowSize() {

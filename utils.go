@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/goccy/go-yaml"
 	"github.com/hajimehoshi/ebiten/v2"
 	"image"
 	"io"
@@ -294,4 +295,17 @@ func GetDigitArray(val int64) []int64 {
 	}
 
 	return digitsBuffer
+}
+
+func LoadYAML(fsys FS, filename string, v any) {
+	data, err := fsys.ReadFile(filename)
+	Check(err)
+	err = yaml.Unmarshal(data, v)
+	Check(err)
+}
+
+func SaveYAML(filename string, v any) {
+	data, err := yaml.Marshal(v)
+	Check(err)
+	WriteFile(filename, data)
 }

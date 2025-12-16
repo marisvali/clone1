@@ -2,10 +2,9 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"github.com/hajimehoshi/ebiten/v2"
 	"golang.org/x/image/font"
-	"golang.org/x/image/font/gofont/goregular"
-	"golang.org/x/image/font/opentype"
 	_ "image/png"
 	"os"
 )
@@ -58,11 +57,8 @@ const (
 	DebugCrash
 )
 
-type UserData struct {
-	BestScore int64 `yaml:"BestScore"`
-}
-
 type Gui struct {
+	Config
 	UserData
 	Animations
 	layout              Pt
@@ -87,9 +83,9 @@ type Gui struct {
 	imgGameWonScreen    *ebiten.Image
 	imgChain            *ebiten.Image
 	folderWatcher1      FolderWatcher
+	folderWatcher2      FolderWatcher
 	defaultFont         font.Face
 	playthrough         Playthrough
-	recordingFile       string
 	frameIdx            int64
 	state               GameState
 	virtualPointerPos   Pt
@@ -103,8 +99,7 @@ type Gui struct {
 	FrameSkipShiftArrow int64
 	FrameSkipArrow      int64
 	enableDebugAreas    bool
-	slowdownFactor      int64       // 1 - does nothing, 2 - game is twice as slow etc
-	accumulatedInput    PlayerInput // only relevant for slowdownFactor > 1, see
+	accumulatedInput    PlayerInput // only relevant for SlowdownFactor > 1, see
 	// the implementation for a more detailed explanation
 	gameArea              Rectangle
 	horizontalDebugArea   Rectangle
@@ -112,6 +107,19 @@ type Gui struct {
 	username              string
 	uploadUserDataChannel chan UserData
 	visWorld              VisWorld
+	devModeEnabled        bool
+}
+
+type Config struct {
+	SlowdownFactor int64  `yaml:"SlowdownFactor"`
+	StartState     string `yaml:"StartState"`
+	PlaybackFile   string `yaml:"PlaybackFile"`
+	RecordToFile   bool   `yaml:"RecordToFile"`
+	RecordingFile  string `yaml:"RecordingFile"`
+}
+
+type UserData struct {
+	BestScore int64 `yaml:"BestScore"`
 }
 
 type PointerState struct {
@@ -134,7 +142,6 @@ func main() {
 	g.playthrough.InputVersion = InputVersion
 	g.playthrough.SimulationVersion = SimulationVersion
 	g.playthrough.ReleaseVersion = ReleaseVersion
-	g.recordingFile = "last-recording.clone1"
 	g.username = getUsername()
 	g.UserData = LoadUserData(g.username)
 	// A channel size of 10 means the channel will buffer 10 inputs before it is
@@ -145,48 +152,49 @@ func main() {
 	g.FrameSkipAltArrow = 1
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
-	g.slowdownFactor = 1
-	g.state = PlayScreen
 
-	if len(os.Args) == 2 {
-		g.state = Playback
-		g.playthrough = DeserializePlaythrough(ReadFile(os.Args[1]))
+	if !FileExists(os.DirFS(".").(FS), "data") {
+		g.FSys = &embeddedFiles
 	} else {
-		// g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))
-		// g.state = DebugCrash
-		g.playthrough.TimerDisabled = true
-		g.playthrough.BricksParams = []BrickParams{
-			{Pt{5, 6}, 30},
-			{Pt{0, 0}, 1},
-			{Pt{0, 1}, 2},
-			{Pt{5, 0}, 3},
-			{Pt{1, 0}, 4},
-			{Pt{2, 0}, 5},
-			{Pt{3, 0}, 6},
-			{Pt{3, 1}, 7},
-			{Pt{3, 2}, 8},
-			{Pt{3, 3}, 9},
-			{Pt{5, 1}, 10},
-			{Pt{0, 5}, 11},
-			{Pt{1, 5}, 12},
-			{Pt{3, 5}, 13},
-			{Pt{4, 5}, 14},
-		}
-		g.playthrough.ChainsParams = []ChainParams{
-			{1, 2},
-			{4, 5},
-			{6, 7},
-			{8, 9},
-			{11, 12},
-			{13, 14},
+		g.FSys = os.DirFS(".").(FS)
+		g.folderWatcher1.Folder = "data/gui"
+		g.folderWatcher2.Folder = "data"
+		// Initialize watchers.
+		// Check if folder contents changed but do nothing with the result
+		// because we just want the watchers to initialize their internal
+		// structures with the current timestamps of files.
+		// This is necessary if we want to avoid creating a new world
+		// immediately after the first world is created, every time.
+		// I want to avoid creating a new world for now because it changes the
+		// id of the current world and it messes up the upload of the world
+		// to the database.
+		g.folderWatcher1.FolderContentsChanged()
+		g.folderWatcher2.FolderContentsChanged()
+	}
+
+	filePassedForPlayback := false
+	if len(os.Args) == 2 {
+		if os.Args[1] == "developer-mode-enabled" {
+			g.devModeEnabled = true
+		} else {
+			filePassedForPlayback = true
 		}
 	}
 
-	if g.state == Playback || g.state == DebugCrash {
+	g.LoadGuiData()
+
+	if filePassedForPlayback {
+		g.StartState = "Playback"
+		g.PlaybackFile = os.Args[1]
+	}
+
+	if g.StartState == "Playback" || filePassedForPlayback {
+		g.state = Playback
 		g.enableDebugAreas = true
-	}
-
-	if g.state == DebugCrash {
+		g.playthrough = DeserializePlaythrough(ReadFile(g.PlaybackFile))
+	} else if g.StartState == "DebugCrash" {
+		g.state = DebugCrash
+		g.enableDebugAreas = true
 		// Don't crash when we are debugging the crash. This is useful if the
 		// crash was caused by one of my asserts:
 		// - world.Step() crashed during the last frame, because my assert
@@ -195,6 +203,11 @@ func main() {
 		// - I can have the world.Step() with the bug execute, and I can see the
 		// results visually
 		CheckCrashes = false
+		g.playthrough = DeserializePlaythrough(ReadFile(g.PlaybackFile))
+	} else if g.StartState == "Play" {
+		g.state = PlayScreen
+	} else {
+		panic(fmt.Errorf("invalid g.StartState: %s", g.StartState))
 	}
 
 	g.world = NewWorldFromPlaythrough(g.playthrough)
@@ -210,37 +223,6 @@ func main() {
 		}
 	}
 
-	if !FileExists(os.DirFS(".").(FS), "data") {
-		g.FSys = &embeddedFiles
-	} else {
-		g.FSys = os.DirFS(".").(FS)
-		g.folderWatcher1.Folder = "data/gui"
-		// Initialize watchers.
-		// Check if folder contents changed but do nothing with the result
-		// because we just want the watchers to initialize their internal
-		// structures with the current timestamps of files.
-		// This is necessary if we want to avoid creating a new world
-		// immediately after the first world is created, every time.
-		// I want to avoid creating a new world for now because it changes the
-		// id of the current world and it messes up the upload of the world
-		// to the database.
-		g.folderWatcher1.FolderContentsChanged()
-	}
-
-	g.LoadGuiData()
-
-	// Load the Arial font.
-	var err error
-	fontData, err := opentype.Parse(goregular.TTF)
-	Check(err)
-
-	g.defaultFont, err = opentype.NewFace(fontData, &opentype.FaceOptions{
-		Size:    44,
-		DPI:     72,
-		Hinting: font.HintingVertical,
-	})
-	Check(err)
-
-	err = ebiten.RunGame(&g)
+	err := ebiten.RunGame(&g)
 	Check(err)
 }

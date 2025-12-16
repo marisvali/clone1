@@ -1,0 +1,8 @@
+# 1 - does nothing, 2 - game is twice as slow etc
+SlowdownFactor: 1
+# "Play", "Playback" or "DebugCrash"
+StartState: "Play"
+PlaybackFile: ""
+# true - record to file, false - don't record
+RecordToFile: false
+RecordingFile: ""

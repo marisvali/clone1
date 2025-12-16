@@ -1,14 +1,15 @@
 package main
 
 import (
+	"github.com/goccy/go-yaml"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"gopkg.in/yaml.v3"
 	"slices"
 )
 
 func (g *Gui) Update() error {
-	if g.folderWatcher1.FolderContentsChanged() {
+	if g.folderWatcher1.FolderContentsChanged() ||
+		g.folderWatcher2.FolderContentsChanged() {
 		g.LoadGuiData()
 	}
 
@@ -92,14 +93,14 @@ func (g *Gui) UpdatePlayScreen() {
 			g.accumulatedInput.Pos = input.Pos
 		}
 	}
-	if g.frameIdx%g.slowdownFactor == 0 {
+	if g.frameIdx%g.SlowdownFactor == 0 {
 		// Save the input in the playthrough.
 		g.playthrough.History = append(g.playthrough.History, g.accumulatedInput)
-		if g.recordingFile != "" {
-			// IMPORTANT: save the playthrough before stepping the World. If
-			// a bug in the World causes it to crash, we want to save the input
-			// that caused the bug before the program crashes.
-			WriteFile(g.recordingFile, g.playthrough.Serialize())
+		// IMPORTANT: save the playthrough before stepping the World. If
+		// a bug in the World causes it to crash, we want to save the input
+		// that caused the bug before the program crashes.
+		if g.RecordToFile {
+			WriteFile(g.RecordingFile, g.playthrough.Serialize())
 		}
 
 		// Step the world.
