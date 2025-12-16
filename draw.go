@@ -125,14 +125,24 @@ func (g *Gui) DrawPlayScreen(screen *ebiten.Image) {
 		})
 	}
 
-	// g.DrawText(screen, fmt.Sprintf("ActualTPS: %f", ebiten.ActualTPS()), false,
-	// 	false,
-	// 	color.NRGBA{
-	// 		R: 0,
-	// 		G: 100,
-	// 		B: 0,
-	// 		A: 255,
-	// 	})
+	g.DrawText(screen, fmt.Sprintf("ActualTPS: %f", ebiten.ActualTPS()), false,
+		false,
+		color.NRGBA{
+			R: 0,
+			G: 100,
+			B: 0,
+			A: 255,
+		})
+	g.DrawText(screen, fmt.Sprintf("ActualTPS: %f ActualFPS: %f",
+		ebiten.ActualTPS(), ebiten.ActualFPS()),
+		false,
+		false,
+		color.NRGBA{
+			R: 0,
+			G: 100,
+			B: 0,
+			A: 255,
+		})
 
 	if g.state == Playback || g.state == DebugCrash {
 		pos := g.ScreenToGame(g.virtualPointerPos)
@@ -227,15 +237,13 @@ func (g *Gui) DrawBricks(worldScreen *ebiten.Image, s BrickState) {
 		if b.ChainedTo > 0 {
 			c1 := b.Bounds.Center()
 			c2 := g.world.GetBrick(b.ChainedTo).Bounds.Center()
-			line := GetLinePoints(c1, c2, 1000)
-			for _, pt := range line {
-				DrawPixel(worldScreen, pt, color.NRGBA{
-					R: 255,
-					G: 255,
-					B: 0,
-					A: 255,
-				})
-			}
+			margin := float64(6)
+			minX := float64(Min(c1.X, c2.X)) - margin
+			maxX := float64(Max(c1.X, c2.X)) + margin
+			minY := float64(Min(c1.Y, c2.Y)) - margin
+			maxY := float64(Max(c1.Y, c2.Y)) + margin
+			DrawSprite(worldScreen, g.imgChain,
+				minX, minY, maxX-minX, maxY-minY)
 		}
 	}
 }
@@ -306,6 +314,7 @@ func (g *Gui) LoadGuiData() {
 		g.imgPausedScreen = LoadImage(g.FSys, "data/gui/screen-paused.png")
 		g.imgGameOverScreen = LoadImage(g.FSys, "data/gui/screen-game-over.png")
 		g.imgGameWonScreen = LoadImage(g.FSys, "data/gui/screen-game-won.png")
+		g.imgChain = LoadImage(g.FSys, "data/gui/chain.png")
 		g.animSplashRadial = NewAnimation(g.FSys, "data/gui/splash-radial")
 		g.animSplashDown = NewAnimation(g.FSys, "data/gui/splash-down")
 
