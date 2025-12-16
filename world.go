@@ -560,6 +560,19 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 	w.UpdateCanonicalBricks()
 	w.MergeBricks()
 
+	// Check if bricks went over the top.
+	// This can be possible due to adjustments made in UpdateCanonicalBricks.
+	for i := range w.Bricks {
+		top := int64(0)
+		brickTop := w.Bricks[i].Bounds.Min.Y
+
+		if brickTop < top {
+			// The brick is over the top.
+			w.State = Lost
+			return
+		}
+	}
+
 	// Disable the check below as we currently do allow intersections to occur
 	// in some cases and the strategy is to recover from them. So "solids
 	// should never intersect" is no longer a valid invariant to check against.
@@ -789,7 +802,14 @@ func (w *World) UpdateCanonicalBricks() {
 		// Find an unoccupied position.
 		for {
 			occupied := false
-			brickAlreadyThere := slots.Get(targetCanPos)
+
+			var brickAlreadyThere *Brick
+			if slots.InBounds(targetCanPos) {
+				brickAlreadyThere = slots.Get(targetCanPos)
+			} else {
+				// The brick is going out of bounds, so just let it go
+				// there and trigger game over.
+			}
 			if brickAlreadyThere != nil && brickAlreadyThere.Val != b.Val {
 				// The position is already occupied by another brick of a
 				// different value.
@@ -805,7 +825,13 @@ func (w *World) UpdateCanonicalBricks() {
 					// above
 					chainedTargetCanPos = Pt{targetCanPos.X, targetCanPos.Y + 1}
 				}
-				brickAlreadyThere = slots.Get(chainedTargetCanPos)
+				brickAlreadyThere = nil
+				if slots.InBounds(chainedTargetCanPos) {
+					brickAlreadyThere = slots.Get(chainedTargetCanPos)
+				} else {
+					// The brick is going out of bounds, so just let it go
+					// there and trigger game over.
+				}
 				if brickAlreadyThere != nil && b2.Val != brickAlreadyThere.Val {
 					// The position is already occupied by another brick of a
 					// different value.
@@ -820,7 +846,9 @@ func (w *World) UpdateCanonicalBricks() {
 			}
 		}
 
-		slots.Set(targetCanPos, b)
+		if slots.InBounds(targetCanPos) {
+			slots.Set(targetCanPos, b)
+		}
 		targetPos := CanonicalPosToPixelPos(targetCanPos)
 
 		// Go towards the target pos, without considering any obstacles.
@@ -832,7 +860,9 @@ func (w *World) UpdateCanonicalBricks() {
 		if b.ChainedTo > 0 {
 			b2 := w.GetBrick(b.ChainedTo)
 			Assert(b2.State == Follower)
-			slots.Set(chainedTargetCanPos, b2)
+			if slots.InBounds(chainedTargetCanPos) {
+				slots.Set(chainedTargetCanPos, b2)
+			}
 		}
 	}
 }
