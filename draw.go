@@ -82,7 +82,7 @@ func (g *Gui) DrawPlayScreen(screen *ebiten.Image) {
 	// Draw empty spaces.
 	for y := int64(0); y < NRows; y++ {
 		for x := int64(0); x < NCols; x++ {
-			pos := g.world.CanonicalPosToPixelPos(Pt{x, y})
+			pos := CanonicalPosToPixelPos(Pt{x, y})
 			DrawSprite(worldScreen, g.imgBlank, float64(pos.X), float64(pos.Y),
 				float64(BrickPixelSize),
 				float64(BrickPixelSize))

@@ -8,9 +8,21 @@ import (
 )
 
 func (g *Gui) Update() error {
-	if g.folderWatcher1.FolderContentsChanged() ||
-		g.folderWatcher2.FolderContentsChanged() {
+	if g.folderWatcher1.FolderContentsChanged() {
 		g.LoadGuiData()
+	}
+	if g.folderWatcher2.FolderContentsChanged() {
+		// Reset the world if the configuration has changed.
+		// This is useful for example while editing a test. You can edit, save,
+		// and the game will automatically reload and display the new version of
+		// the test.
+		g.LoadGuiData()
+		if g.LoadTest {
+			var test Test
+			LoadYAML(g.FSys, g.TestFile, &test)
+			g.playthrough.Level = test.GetLevel()
+		}
+		g.world = NewWorldFromPlaythrough(g.playthrough)
 	}
 
 	g.pointer = g.GetPointerState()

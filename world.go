@@ -253,15 +253,19 @@ type Brick struct {
 	Bounds            Rectangle
 }
 
-func (w *World) NewCanonicalBrick(canPos Pt, val int64) Brick {
-	// Ensure the canonical position is valid.
-	Assert(canPos.X >= 0 && canPos.X < NCols && canPos.Y >= -1 && canPos.Y < NRows)
+func (w *World) NewBrick(pos Pt, val int64) Brick {
+	// Ensure the position is valid.
+	Assert(pos.X >= 0)
+	Assert(pos.X <= PlayAreaWidth-BrickPixelSize)
+	Assert(pos.Y >= 0)
+	Assert(pos.Y <= PlayAreaHeight+BrickMarginPixelSize)
+
 	b := Brick{
 		Id:    w.NextBrickId,
 		Val:   val,
 		State: Canonical,
 	}
-	b.SetPixelPos(w.CanonicalPosToPixelPos(canPos), w)
+	b.SetPixelPos(pos, w)
 	w.NextBrickId++
 	return b
 }
@@ -277,8 +281,8 @@ func (b *Brick) SetPixelPos(newPos Pt, w *World) {
 
 	b.PixelPos = newPos
 	b.Bounds = BrickBounds(b.PixelPos)
-	b.CanonicalPos = w.PixelPosToCanonicalPos(b.PixelPos)
-	b.CanonicalPixelPos = w.CanonicalPosToPixelPos(b.CanonicalPos)
+	b.CanonicalPos = PixelPosToCanonicalPos(b.PixelPos)
+	b.CanonicalPixelPos = CanonicalPosToPixelPos(b.CanonicalPos)
 	// Ensure the new position is valid.
 	Assert(b.PixelPos.X >= 0 && b.PixelPos.X < PlayAreaWidth)
 	// Ensure the canonical position is valid.
@@ -362,7 +366,7 @@ func NewWorld(seed int64, l Level) (w World) {
 	w.Seed = seed
 	w.TimerDisabled = l.TimerDisabled
 	for i := range l.BricksParams {
-		w.OriginalBricks = append(w.OriginalBricks, w.NewCanonicalBrick(
+		w.OriginalBricks = append(w.OriginalBricks, w.NewBrick(
 			l.BricksParams[i].Pos,
 			l.BricksParams[i].Val))
 	}
@@ -697,13 +701,13 @@ func (w *World) MarkFallingBricks() {
 		}
 
 		// Get the slot underneath the brick.
-		slot := BrickBounds(w.CanonicalPosToPixelPos(canPosUnder))
+		slot := BrickBounds(CanonicalPosToPixelPos(canPosUnder))
 
 		// Extend slot with follower's slot if necessary.
 		if b.ChainedTo > 0 {
 			b2 := w.GetBrick(b.ChainedTo)
 			if b2.CanonicalPos.X == b.CanonicalPos.X+1 {
-				slot2 := BrickBounds(w.CanonicalPosToPixelPos(Pt{canPosUnder.X + 1, canPosUnder.Y}))
+				slot2 := BrickBounds(CanonicalPosToPixelPos(Pt{canPosUnder.X + 1, canPosUnder.Y}))
 				slot.Max = slot2.Max
 			}
 		}
@@ -817,7 +821,7 @@ func (w *World) UpdateCanonicalBricks() {
 		}
 
 		slots.Set(targetCanPos, b)
-		targetPos := w.CanonicalPosToPixelPos(targetCanPos)
+		targetPos := CanonicalPosToPixelPos(targetCanPos)
 
 		// Go towards the target pos, without considering any obstacles.
 		w.MoveBrick(b, targetPos, w.CanonicalAdjustmentSpeed,
@@ -869,10 +873,10 @@ func (w *World) MergeBricks() {
 		// position.
 		b1 := &w.Bricks[i]
 		b2 := &w.Bricks[j]
-		canPos1 := w.PixelPosToCanonicalPixelPos(b1.PixelPos)
+		canPos1 := PixelPosToCanonicalPixelPos(b1.PixelPos)
 		dif1 := b1.PixelPos.SquaredDistTo(canPos1)
 
-		canPos2 := w.PixelPosToCanonicalPixelPos(b2.PixelPos)
+		canPos2 := PixelPosToCanonicalPixelPos(b2.PixelPos)
 		dif2 := b2.PixelPos.SquaredDistTo(canPos2)
 
 		var idxToRemove int
@@ -924,7 +928,8 @@ func (w *World) CreateFirstRowsOfBricks() {
 	// Create the first row.
 	for x := range NCols {
 		val := w.RInt(1, w.MaxInitialBrickValue-1)
-		w.Bricks = append(w.Bricks, w.NewCanonicalBrick(Pt{x, 0}, val))
+		pos := CanonicalPosToPixelPos(Pt{x, 0})
+		w.Bricks = append(w.Bricks, w.NewBrick(pos, val))
 	}
 
 	// Create a row below that will not cause any merges.
@@ -949,7 +954,7 @@ func (w *World) CreateNewRowOfBricks(maxVal int64) {
 	for x := range NCols {
 		// Get a value that is different from the value of the brick right
 		// above (if there is a brick right above).
-		newPos := Pt{x, -1}
+		newPos := CanonicalPosToPixelPos(Pt{x, -1})
 		posAbove := Pt{x, 0}
 		forbiddenValue := int64(0)
 		for _, b := range w.Bricks {
@@ -966,7 +971,7 @@ func (w *World) CreateNewRowOfBricks(maxVal int64) {
 			}
 		}
 
-		w.Bricks = append(w.Bricks, w.NewCanonicalBrick(newPos, val))
+		w.Bricks = append(w.Bricks, w.NewBrick(newPos, val))
 	}
 }
 
@@ -1053,7 +1058,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 	}
 }
 
-func (w *World) PixelPosToCanonicalPos(pixelPos Pt) (canPos Pt) {
+func PixelPosToCanonicalPos(pixelPos Pt) (canPos Pt) {
 	l := float64(BrickPixelSize + BrickMarginPixelSize)
 	canPos.X = int64(math.Round(float64(pixelPos.X) / l))
 	canPos.Y = int64(math.Round(
@@ -1061,16 +1066,16 @@ func (w *World) PixelPosToCanonicalPos(pixelPos Pt) (canPos Pt) {
 	return
 }
 
-func (w *World) CanonicalPosToPixelPos(canPos Pt) (pixelPos Pt) {
+func CanonicalPosToPixelPos(canPos Pt) (pixelPos Pt) {
 	l := BrickPixelSize + BrickMarginPixelSize
 	pixelPos.X = canPos.X * l
 	pixelPos.Y = PlayAreaHeight - (canPos.Y+1)*l + BrickMarginPixelSize
 	return
 }
 
-func (w *World) PixelPosToCanonicalPixelPos(pixelPos Pt) (canPixelPos Pt) {
-	canPos := w.PixelPosToCanonicalPos(pixelPos)
-	canPixelPos = w.CanonicalPosToPixelPos(canPos)
+func PixelPosToCanonicalPixelPos(pixelPos Pt) (canPixelPos Pt) {
+	canPos := PixelPosToCanonicalPos(pixelPos)
+	canPixelPos = CanonicalPosToPixelPos(canPos)
 	return
 }
 

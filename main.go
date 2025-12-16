@@ -116,6 +116,8 @@ type Config struct {
 	PlaybackFile   string `yaml:"PlaybackFile"`
 	RecordToFile   bool   `yaml:"RecordToFile"`
 	RecordingFile  string `yaml:"RecordingFile"`
+	LoadTest       bool   `yaml:"LoadTest"`
+	TestFile       string `yaml:"TestFile"`
 }
 
 type UserData struct {
@@ -206,6 +208,11 @@ func main() {
 		g.playthrough = DeserializePlaythrough(ReadFile(g.PlaybackFile))
 	} else if g.StartState == "Play" {
 		g.state = PlayScreen
+		if g.LoadTest {
+			var test Test
+			LoadYAML(g.FSys, g.TestFile, &test)
+			g.playthrough.Level = test.GetLevel()
+		}
 	} else {
 		panic(fmt.Errorf("invalid g.StartState: %s", g.StartState))
 	}

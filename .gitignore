@@ -1,3 +1,4 @@
 /last-recording.clone1
 *.wasm
 data/config-dev.yaml
+data/test-dev.yaml
