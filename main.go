@@ -153,6 +153,7 @@ func main() {
 	} else {
 		// g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))
 		// g.state = DebugCrash
+		g.playthrough.TimerDisabled = true
 		g.playthrough.BricksParams = []BrickParams{
 			{Pt{5, 6}, 30},
 			{Pt{0, 0}, 1},

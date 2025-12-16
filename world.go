@@ -233,8 +233,9 @@ type ChainParams struct {
 }
 
 type Level struct {
-	BricksParams []BrickParams
-	ChainsParams []ChainParams
+	BricksParams  []BrickParams
+	ChainsParams  []ChainParams
+	TimerDisabled bool
 }
 
 type Brick struct {
@@ -303,6 +304,7 @@ type World struct {
 	Bricks                   []Brick
 	DraggingOffset           Pt
 	DebugPts                 []Pt
+	TimerDisabled            bool
 	TimerCooldown            int64
 	TimerCooldownIdx         int64
 	ComingUpDistanceLeft     int64
@@ -358,6 +360,7 @@ func NewWorld(seed int64, l Level) (w World) {
 
 	// Transform Level parameters into the World's initial state.
 	w.Seed = seed
+	w.TimerDisabled = l.TimerDisabled
 	for i := range l.BricksParams {
 		w.OriginalBricks = append(w.OriginalBricks, w.NewCanonicalBrick(
 			l.BricksParams[i].Pos,
@@ -534,16 +537,18 @@ func (w *World) DetermineDraggedBrick(input PlayerInput) {
 }
 
 func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
-	w.TimerCooldownIdx--
-	if w.TimerCooldownIdx <= 0 {
-		w.State = ComingUp
-		return
-	}
+	if !w.TimerDisabled {
+		w.TimerCooldownIdx--
+		if w.TimerCooldownIdx <= 0 {
+			w.State = ComingUp
+			return
+		}
 
-	if w.NoMoreMergesArePossible() {
-		w.TimerCooldownIdx = 0
-		w.State = ComingUp
-		return
+		if w.NoMoreMergesArePossible() {
+			w.TimerCooldownIdx = 0
+			w.State = ComingUp
+			return
+		}
 	}
 
 	w.UpdateDraggedBrick(input)
