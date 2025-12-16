@@ -144,20 +144,43 @@ func main() {
 	g.FrameSkipAltArrow = 1
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
-
 	g.slowdownFactor = 1
 	g.state = PlayScreen
-	// g.state = DebugCrash
-	// g.state = HomeScreen
-	// g.state = Playback
 
 	if len(os.Args) == 2 {
-		g.recordingFile = os.Args[1]
 		g.state = Playback
+		g.playthrough = DeserializePlaythrough(ReadFile(os.Args[1]))
+	} else {
+		// g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))
+		// g.state = DebugCrash
+		g.playthrough.BricksParams = []BrickParams{
+			{Pt{5, 6}, 30},
+			{Pt{0, 0}, 1},
+			{Pt{0, 1}, 2},
+			{Pt{5, 0}, 3},
+			{Pt{1, 0}, 4},
+			{Pt{2, 0}, 5},
+			{Pt{3, 0}, 6},
+			{Pt{3, 1}, 7},
+			{Pt{3, 2}, 8},
+			{Pt{3, 3}, 9},
+			{Pt{5, 1}, 10},
+			{Pt{0, 5}, 11},
+			{Pt{1, 5}, 12},
+			{Pt{3, 5}, 13},
+			{Pt{4, 5}, 14},
+		}
+		g.playthrough.ChainsParams = []ChainParams{
+			{1, 2},
+			{4, 5},
+			{6, 7},
+			{8, 9},
+			{11, 12},
+			{13, 14},
+		}
 	}
 
 	if g.state == Playback || g.state == DebugCrash {
-		g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))
 		g.enableDebugAreas = true
 	}
 
@@ -171,23 +194,7 @@ func main() {
 		// results visually
 		CheckCrashes = false
 	}
-	//
-	g.playthrough.BricksParams = []BrickParams{
-		{Pt{0, 0}, 1},
-		{Pt{0, 1}, 2},
-		{Pt{5, 0}, 3},
-		{Pt{1, 0}, 4},
-		{Pt{2, 0}, 5},
-		{Pt{3, 0}, 6},
-		{Pt{3, 1}, 7},
-		{Pt{3, 2}, 8},
-		{Pt{4, 0}, 8},
-		{Pt{5, 1}, 8},
-	}
-	g.playthrough.ChainsParams = []ChainParams{
-		{0, 1},
-		{3, 4},
-	}
+
 	g.world = NewWorldFromPlaythrough(g.playthrough)
 
 	// The last input caused the crash, so run the whole playthrough except the
