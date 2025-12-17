@@ -236,7 +236,15 @@ func (g *Gui) UpdatePlayback() {
 		targetFrameIdx = nFrames - 1
 	}
 
-	if targetFrameIdx != g.frameIdx {
+	if targetFrameIdx > g.frameIdx {
+		// Advance the world.
+		for i := g.frameIdx; i < targetFrameIdx; i++ {
+			g.world.Step(g.playthrough.History[i])
+		}
+
+		// Set the current frame idx.
+		g.frameIdx = targetFrameIdx
+	} else if targetFrameIdx < g.frameIdx {
 		// Rewind.
 		g.world = NewWorldFromPlaythrough(g.playthrough)
 
