@@ -1152,7 +1152,11 @@ const (
 // This includes walls and other bricks that have different values than b.
 func (w *World) GetObstacles(b *Brick,
 	o GetObstaclesOption) (obstacles []Rectangle) {
-	obstacles = w.ObstaclesBuffer[:0]
+	// TODO: think of what to do about the line below, the ObstaclesBuffer is
+	// a performance enhancer, but only if you are using a single buffer at once
+	// Maybe the caller should give the buffer to the function, in general.
+	// Maybe buffers should come from outside.
+	// obstacles = w.ObstaclesBuffer[:0]
 	for j := range w.Bricks {
 		otherB := &w.Bricks[j]
 		if otherB == b || otherB.Id == b.ChainedTo {
