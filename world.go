@@ -930,14 +930,38 @@ func (w *World) MergeBricks() {
 		}
 		w.JustMergedBricks = append(w.JustMergedBricks, brickToUpdate)
 
+		// A merge breaks the chains off the bricks involved in the merge.
+		w.UnchainBrick(b1)
+		w.UnchainBrick(b2)
+
 		// Update the score.
 		w.Score += brickToUpdate.Val
+
+		// Perform the merge.
 		brickToUpdate.Val++
 		brickToUpdate.State = Canonical
 		w.Bricks = Remove(w.Bricks, idxToRemove)
 		if brickToUpdate.Val == w.MaxBrickValue {
 			w.State = Won
 		}
+	}
+}
+
+func (w *World) UnchainBrick(b *Brick) {
+	if b.ChainedTo == 0 {
+		return
+	}
+
+	b2 := w.GetBrick(b.ChainedTo)
+	b.ChainedTo = 0
+	b2.ChainedTo = 0
+
+	if b.State == Follower {
+		b.State = b2.State
+	} else if b2.State == Follower {
+		b2.State = b.State
+	} else {
+		panic("no follower")
 	}
 }
 
