@@ -49,7 +49,8 @@ func (g *Gui) LoadGuiData() {
 		g.imgPausedScreen = LoadImage(g.FSys, "data/gui/screen-paused.png")
 		g.imgGameOverScreen = LoadImage(g.FSys, "data/gui/screen-game-over.png")
 		g.imgGameWonScreen = LoadImage(g.FSys, "data/gui/screen-game-won.png")
-		g.imgChain = LoadImage(g.FSys, "data/gui/chain.png")
+		g.imgChainH = LoadImage(g.FSys, "data/gui/chain-h.png")
+		g.imgChainV = LoadImage(g.FSys, "data/gui/chain-v.png")
 		g.animSplashRadial = NewAnimation(g.FSys, "data/gui/splash-radial")
 		g.animSplashDown = NewAnimation(g.FSys, "data/gui/splash-down")
 

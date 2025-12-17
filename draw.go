@@ -233,16 +233,22 @@ func (g *Gui) DrawBricks(worldScreen *ebiten.Image, s BrickState) {
 		DrawSprite(worldScreen, img, float64(pos.X), float64(pos.Y),
 			float64(BrickPixelSize),
 			float64(BrickPixelSize))
-		if b.ChainedTo > 0 {
+		if b.ChainedTo > 0 && b.State != Follower {
 			c1 := b.Bounds.Center()
 			c2 := g.world.GetBrick(b.ChainedTo).Bounds.Center()
-			margin := float64(6)
-			minX := float64(Min(c1.X, c2.X)) - margin
-			maxX := float64(Max(c1.X, c2.X)) + margin
-			minY := float64(Min(c1.Y, c2.Y)) - margin
-			maxY := float64(Max(c1.Y, c2.Y)) + margin
-			DrawSprite(worldScreen, g.imgChain,
-				minX, minY, maxX-minX, maxY-minY)
+			c := c1.Plus(c2).DivBy(2)
+			b2 := g.world.GetBrick(b.ChainedTo)
+			if b2.CanonicalPos.X == b.CanonicalPos.X+1 {
+				minX := float64(c.X) - float64(ChainWidth)/2
+				minY := float64(c.Y) - float64(ChainHeight)/2
+				DrawSprite(worldScreen, g.imgChainH,
+					minX, minY, float64(ChainWidth), float64(ChainHeight))
+			} else {
+				minX := float64(c.X) - float64(ChainHeight)/2
+				minY := float64(c.Y) - float64(ChainWidth)/2
+				DrawSprite(worldScreen, g.imgChainV,
+					minX, minY, float64(ChainHeight), float64(ChainWidth))
+			}
 		}
 	}
 }

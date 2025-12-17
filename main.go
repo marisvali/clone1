@@ -81,7 +81,8 @@ type Gui struct {
 	imgPausedScreen     *ebiten.Image
 	imgGameOverScreen   *ebiten.Image
 	imgGameWonScreen    *ebiten.Image
-	imgChain            *ebiten.Image
+	imgChainH           *ebiten.Image
+	imgChainV           *ebiten.Image
 	folderWatcher1      FolderWatcher
 	folderWatcher2      FolderWatcher
 	defaultFont         font.Face
