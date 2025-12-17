@@ -629,10 +629,23 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 
 		// If the dragged brick intersects something, it becomes canonical and the
 		// behavior of canonical bricks will resolve the intersection.
-		bounds := w.ExtendedBrickBounds(dragged)
-		if RectIntersectsRects(bounds, obstacles) {
+		if RectIntersectsRects(dragged.Bounds, obstacles) {
 			dragged.State = Canonical
 			return
+		}
+
+		if dragged.ChainedTo != 0 {
+			b2 := w.GetBrick(dragged.ChainedTo)
+
+			// Get the set of rectangles the brick must not intersect.
+			obstacles2 := w.GetObstacles(b2, IncludingTop)
+
+			// If the dragged brick intersects something, it becomes canonical and the
+			// behavior of canonical bricks will resolve the intersection.
+			if RectIntersectsRects(b2.Bounds, obstacles2) {
+				dragged.State = Canonical
+				return
+			}
 		}
 
 		targetPos := input.Pos.Plus(w.DraggingOffset)
@@ -699,18 +712,30 @@ func (w *World) MarkFallingBricks() {
 		}
 
 		// Skip bricks which currently intersect other bricks.
-		bounds := w.ExtendedBrickBounds(b)
 		intersects := false
-		for j := range w.Bricks {
-			// TODO: fix bugs in this function, it should allow for a brick to intersect the chained brick if they are of the same value
-			if i != j && b.Val != w.Bricks[j].Val && (b.ChainedTo == 0 ||
-				w.Bricks[j].Id != b.ChainedTo) && w.Bricks[j].Bounds.Intersects(bounds) {
+		for _, otherB := range w.Bricks {
+			if b.Id != otherB.Id && b.Val != otherB.Val &&
+				otherB.Bounds.Intersects(b.Bounds) {
 				intersects = true
 				break
 			}
 		}
 		if intersects {
 			continue
+		}
+
+		if b.ChainedTo != 0 {
+			b2 := w.GetBrick(b.ChainedTo)
+			for _, otherB := range w.Bricks {
+				if b2.Id != otherB.Id && b2.Val != otherB.Val &&
+					otherB.Bounds.Intersects(b2.Bounds) {
+					intersects = true
+					break
+				}
+			}
+			if intersects {
+				continue
+			}
 		}
 
 		// Check if there's anything under this brick.
@@ -721,20 +746,8 @@ func (w *World) MarkFallingBricks() {
 			continue
 		}
 
-		// Get the slot underneath the brick.
+		// Check the slot underneath the brick.
 		slot := BrickBounds(CanonicalPosToPixelPos(canPosUnder))
-
-		// Extend slot with follower's slot if necessary.
-		if b.ChainedTo > 0 {
-			b2 := w.GetBrick(b.ChainedTo)
-			if b2.CanonicalPos.X == b.CanonicalPos.X+1 {
-				slot2 := BrickBounds(CanonicalPosToPixelPos(Pt{canPosUnder.X + 1, canPosUnder.Y}))
-				slot.Max = slot2.Max
-			}
-		}
-
-		// Check if any bricks intersect the slot.
-		intersects = false
 		for j := range w.Bricks {
 			if i != j && b.Val != w.Bricks[j].Val &&
 				w.Bricks[j].Bounds.Intersects(slot) {
@@ -742,6 +755,30 @@ func (w *World) MarkFallingBricks() {
 				break
 			}
 		}
+		if intersects {
+			continue
+		}
+
+		// Check the slot underneath the other brick.
+		if b.ChainedTo != 0 {
+			b2 := w.GetBrick(b.ChainedTo)
+			if b2.CanonicalPos.X == b.CanonicalPos.X+1 {
+				canPosUnder2 := b2.CanonicalPos
+				canPosUnder2.Y--
+				slot2 := BrickBounds(CanonicalPosToPixelPos(canPosUnder2))
+				for j := range w.Bricks {
+					if i != j && b2.Val != w.Bricks[j].Val &&
+						w.Bricks[j].Bounds.Intersects(slot2) {
+						intersects = true
+						break
+					}
+				}
+				if intersects {
+					continue
+				}
+			}
+		}
+
 		if !intersects {
 			b.State = Falling
 			b.FallingSpeed = 0
@@ -1215,19 +1252,38 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 	}
 
 	if moveType == StopAtFirstObstacleExceptTop {
-		obstacles := w.GetObstacles(b, ExceptTop)
-		r := w.ExtendedBrickBounds(b)
-		// Move b.PixelPos towards targetPos.
-		// But do so by moving the extended brick bounds, r.
-		// There could be a difference between r.Min and b.PixelPos.
-		// Which means I have to move from targetPos towards a new position with
-		// the same vector that I move from b.PixelPos to r.Min. The vector for
-		// moving from A to B is (B-A).
-		targetPos.Add(r.Min.Minus(b.PixelPos))
-		newR, nPixelsLeft := MoveRect(r, targetPos, nMaxPixels, obstacles)
-		dif := newR.Min.Minus(r.Min)
-		b.SetPixelPos(b.PixelPos.Plus(dif), w)
-		return nPixelsLeft > 0
+		if b.ChainedTo == 0 {
+			obstacles := w.GetObstacles(b, ExceptTop)
+			r := b.Bounds
+			newR, nPixelsLeft := MoveRect(r, targetPos, nMaxPixels, obstacles)
+			dif := newR.Min.Minus(r.Min)
+			b.SetPixelPos(b.PixelPos.Plus(dif), w)
+			return nPixelsLeft > 0
+		} else {
+			b2 := w.GetBrick(b.ChainedTo)
+			r := b.Bounds
+			r2 := b2.Bounds
+			obstacles := w.GetObstacles(b, ExceptTop)
+			obstacles2 := w.GetObstacles(b2, ExceptTop)
+			targetPos2 := b2.PixelPos.Plus(targetPos.Minus(b.PixelPos))
+
+			var dif, dif2 Pt
+			newRA, nPixelsLeftA := MoveRect(r, targetPos, nMaxPixels, obstacles)
+			dif = newRA.Min.Minus(r.Min)
+			newR2A, nPixelsLeft2A := MoveRect(r2, targetPos2, nMaxPixels, obstacles2)
+			dif2 = newR2A.Min.Minus(r2.Min)
+
+			if b2.PixelPos.Plus(dif2).Y < 0 {
+				println("got here 2")
+			}
+			if nPixelsLeft2A > nPixelsLeftA {
+				b.SetPixelPos(b.PixelPos.Plus(dif2), w)
+				return nPixelsLeft2A > 0
+			} else {
+				b.SetPixelPos(b.PixelPos.Plus(dif), w)
+				return nPixelsLeftA > 0
+			}
+		}
 	}
 
 	if moveType == SlideOnObstacles {
@@ -1264,31 +1320,84 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 		// or "teleports" and the effect of the brick travelling is more
 		// pleasant. It gives more of a feeling that it is an actual solid
 		// object in solid space on which forces are acting.
-		r := w.ExtendedBrickBounds(b)
-		// Move b.PixelPos towards targetPos.
-		// But do so by moving the extended brick bounds, r.
-		// There could be a difference between r.Min and b.PixelPos.
-		// Which means I have to move from targetPos towards a new position with
-		// the same vector that I move from b.PixelPos to r.Min. The vector for
-		// moving from A to B is (B-A).
-		targetPos.Add(r.Min.Minus(b.PixelPos))
+		if b.ChainedTo == 0 {
+			r := b.Bounds
+			obstacles := w.GetObstacles(b, IncludingTop)
 
-		obstacles := w.GetObstacles(b, IncludingTop)
+			// First, go as far as possible towards the target, in a straight line.
+			newR, nPixelsLeft := MoveRect(r, targetPos, nMaxPixels, obstacles)
 
-		// First, go as far as possible towards the target, in a straight line.
-		var newR Rectangle
-		newR, nMaxPixels = MoveRect(r, targetPos, nMaxPixels, obstacles)
+			// Now, go towards the target's X as much as possible.
+			newR, nPixelsLeft = MoveRect(newR, Pt{targetPos.X, newR.Min.Y},
+				nPixelsLeft, obstacles)
 
-		// Now, go towards the target's X as much as possible.
-		newR, nMaxPixels = MoveRect(newR, Pt{targetPos.X, newR.Min.Y},
-			nMaxPixels, obstacles)
+			// Now, go towards the target's Y as much as possible.
+			newR, nPixelsLeft = MoveRect(newR, Pt{newR.Min.X, targetPos.Y},
+				nPixelsLeft, obstacles)
 
-		// Now, go towards the target's Y as much as possible.
-		newR, nMaxPixels = MoveRect(newR, Pt{newR.Min.X, targetPos.Y},
-			nMaxPixels, obstacles)
+			dif := newR.Min.Minus(r.Min)
+			b.SetPixelPos(b.PixelPos.Plus(dif), w)
+		} else {
+			b2 := w.GetBrick(b.ChainedTo)
+			r := b.Bounds
+			r2 := b2.Bounds
+			obstacles := w.GetObstacles(b, IncludingTop)
+			obstacles2 := w.GetObstacles(b2, IncludingTop)
+			targetPos2 := b2.PixelPos.Plus(targetPos.Minus(b.PixelPos))
 
-		dif := newR.Min.Minus(r.Min)
-		b.SetPixelPos(b.PixelPos.Plus(dif), w)
+			var dif, dif2 Pt
+			newRA, nPixelsLeftA := MoveRect(r, targetPos, nMaxPixels, obstacles)
+			dif = newRA.Min.Minus(r.Min)
+			newR2A, nPixelsLeft2A := MoveRect(r2, targetPos2, nMaxPixels, obstacles2)
+			dif2 = newR2A.Min.Minus(r2.Min)
+
+			if b2.PixelPos.Plus(dif2).Y < 0 {
+				println("got here 2")
+			}
+			if nPixelsLeft2A > nPixelsLeftA {
+				b.SetPixelPos(b.PixelPos.Plus(dif2), w)
+			} else {
+				b.SetPixelPos(b.PixelPos.Plus(dif), w)
+			}
+
+			nMaxPixelsB := Max(nPixelsLeft2A, nPixelsLeftA)
+			r = b.Bounds
+			r2 = b2.Bounds
+			newRB, nPixelsLeftB := MoveRect(r, Pt{targetPos.X, r.Min.Y}, nMaxPixelsB, obstacles)
+			dif = newRB.Min.Minus(r.Min)
+			newR2B, nPixelsLeft2B := MoveRect(r2, Pt{targetPos2.X, r2.Min.Y}, nMaxPixelsB, obstacles2)
+			dif2 = newR2B.Min.Minus(r2.Min)
+
+			if b2.PixelPos.Plus(dif2).Y < 0 {
+				println("got here 2")
+			}
+			if b2.PixelPos.Plus(dif2).X > 500 {
+				// println("got here 3")
+			}
+			if nPixelsLeft2B > nPixelsLeftB {
+				b.SetPixelPos(b.PixelPos.Plus(dif2), w)
+			} else {
+				b.SetPixelPos(b.PixelPos.Plus(dif), w)
+			}
+
+			nMaxPixelsC := Max(nPixelsLeft2B, nPixelsLeftB)
+			r = b.Bounds
+			r2 = b2.Bounds
+			newRC, nPixelsLeftC := MoveRect(r, Pt{r.Min.X, targetPos.Y}, nMaxPixelsC, obstacles)
+			dif = newRC.Min.Minus(r.Min)
+			newR2C, nPixelsLeft2C := MoveRect(r2, Pt{r2.Min.X, targetPos2.Y}, nMaxPixelsC, obstacles2)
+			dif2 = newR2C.Min.Minus(r2.Min)
+
+			if b2.PixelPos.Plus(dif2).Y < 0 {
+				println("got here 2")
+			}
+			if nPixelsLeft2C > nPixelsLeftC {
+				b.SetPixelPos(b.PixelPos.Plus(dif2), w)
+			} else {
+				b.SetPixelPos(b.PixelPos.Plus(dif), w)
+			}
+		}
+
 		return true
 	}
 
