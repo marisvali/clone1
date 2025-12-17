@@ -658,22 +658,6 @@ func BrickBounds(posPixels Pt) Rectangle {
 		posPixels.Plus(Pt{BrickPixelSize, BrickPixelSize}))
 }
 
-func (w *World) ExtendedBrickBounds(b *Brick) Rectangle {
-	if b.ChainedTo > 0 {
-		b2 := w.GetBrick(b.ChainedTo)
-		Assert(b.State != Follower)
-		Assert(b2.State == Follower)
-		var r Rectangle
-		r.Min.X = Min(b.Bounds.Min.X, b2.Bounds.Min.X)
-		r.Min.Y = Min(b.Bounds.Min.Y, b2.Bounds.Min.Y)
-		r.Max.X = Max(b.Bounds.Max.X, b2.Bounds.Max.X)
-		r.Max.Y = Max(b.Bounds.Max.Y, b2.Bounds.Max.Y)
-		return r
-	} else {
-		return b.Bounds
-	}
-}
-
 func (w *World) UpdateFallingBricks() {
 	for i := range w.Bricks {
 		b := &w.Bricks[i]
