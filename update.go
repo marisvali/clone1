@@ -22,6 +22,7 @@ func (g *Gui) Update() error {
 			LoadYAML(g.FSys, g.TestFile, &test)
 			g.playthrough.Level = test.GetLevel()
 		}
+		g.playthrough.AllowOverlappingDrags = g.AllowOverlappingDrags
 		g.world = NewWorldFromPlaythrough(g.playthrough)
 	}
 

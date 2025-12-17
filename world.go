@@ -233,9 +233,10 @@ type ChainParams struct {
 }
 
 type Level struct {
-	BricksParams  []BrickParams
-	ChainsParams  []ChainParams
-	TimerDisabled bool
+	BricksParams          []BrickParams
+	ChainsParams          []ChainParams
+	TimerDisabled         bool
+	AllowOverlappingDrags bool
 }
 
 type Brick struct {
@@ -328,6 +329,7 @@ type World struct {
 	Score                    int64
 	JustMergedBricks         []*Brick
 	SlotsBuffer              Mat
+	AllowOverlappingDrags    bool
 }
 
 type PlayerInput struct {
@@ -365,6 +367,7 @@ func NewWorld(seed int64, l Level) (w World) {
 	// Transform Level parameters into the World's initial state.
 	w.Seed = seed
 	w.TimerDisabled = l.TimerDisabled
+	w.AllowOverlappingDrags = l.AllowOverlappingDrags
 	for i := range l.BricksParams {
 		w.OriginalBricks = append(w.OriginalBricks, w.NewBrick(
 			l.BricksParams[i].Pos,
@@ -382,7 +385,7 @@ func (w *World) GetBrick(id int64) *Brick {
 			return &w.Bricks[i]
 		}
 	}
-	return nil
+	panic(fmt.Errorf("brick not found: %d", id))
 }
 
 func ChainBricks(b1 *Brick, b2 *Brick) {
@@ -528,7 +531,7 @@ func (w *World) DetermineDraggedBrick(input PlayerInput) {
 				dragged = closest
 			}
 			dragged.State = Dragged
-			w.DraggingOffset = w.ExtendedBrickBounds(dragged).Min.Minus(input.Pos)
+			w.DraggingOffset = dragged.Bounds.Min.Minus(input.Pos)
 		}
 	}
 
@@ -617,19 +620,24 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 		return
 	}
 
-	// Get the set of rectangles the brick must not intersect.
-	obstacles := w.GetObstacles(dragged, IncludingTop)
+	if w.AllowOverlappingDrags {
+		targetPos := input.Pos.Plus(w.DraggingOffset)
+		w.MoveBrick(dragged, targetPos, w.DragSpeed, IgnoreObstacles)
+	} else {
+		// Get the set of rectangles the brick must not intersect.
+		obstacles := w.GetObstacles(dragged, IncludingTop)
 
-	// If the dragged brick intersects something, it becomes canonical and the
-	// behavior of canonical bricks will resolve the intersection.
-	bounds := w.ExtendedBrickBounds(dragged)
-	if RectIntersectsRects(bounds, obstacles) {
-		dragged.State = Canonical
-		return
+		// If the dragged brick intersects something, it becomes canonical and the
+		// behavior of canonical bricks will resolve the intersection.
+		bounds := w.ExtendedBrickBounds(dragged)
+		if RectIntersectsRects(bounds, obstacles) {
+			dragged.State = Canonical
+			return
+		}
+
+		targetPos := input.Pos.Plus(w.DraggingOffset)
+		w.MoveBrick(dragged, targetPos, w.DragSpeed, SlideOnObstacles)
 	}
-
-	targetPos := input.Pos.Plus(w.DraggingOffset)
-	w.MoveBrick(dragged, targetPos, w.DragSpeed, SlideOnObstacles)
 }
 
 func BrickBounds(posPixels Pt) Rectangle {
@@ -1181,6 +1189,13 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 	if moveType == StopAtFirstObstacleExceptTop {
 		obstacles := w.GetObstacles(b, ExceptTop)
 		r := w.ExtendedBrickBounds(b)
+		// Move b.PixelPos towards targetPos.
+		// But do so by moving the extended brick bounds, r.
+		// There could be a difference between r.Min and b.PixelPos.
+		// Which means I have to move from targetPos towards a new position with
+		// the same vector that I move from b.PixelPos to r.Min. The vector for
+		// moving from A to B is (B-A).
+		targetPos.Add(r.Min.Minus(b.PixelPos))
 		newR, nPixelsLeft := MoveRect(r, targetPos, nMaxPixels, obstacles)
 		dif := newR.Min.Minus(r.Min)
 		b.SetPixelPos(b.PixelPos.Plus(dif), w)
@@ -1222,6 +1237,14 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 		// pleasant. It gives more of a feeling that it is an actual solid
 		// object in solid space on which forces are acting.
 		r := w.ExtendedBrickBounds(b)
+		// Move b.PixelPos towards targetPos.
+		// But do so by moving the extended brick bounds, r.
+		// There could be a difference between r.Min and b.PixelPos.
+		// Which means I have to move from targetPos towards a new position with
+		// the same vector that I move from b.PixelPos to r.Min. The vector for
+		// moving from A to B is (B-A).
+		targetPos.Add(r.Min.Minus(b.PixelPos))
+
 		obstacles := w.GetObstacles(b, IncludingTop)
 
 		// First, go as far as possible towards the target, in a straight line.

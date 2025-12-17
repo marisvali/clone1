@@ -111,13 +111,14 @@ type Gui struct {
 }
 
 type Config struct {
-	SlowdownFactor int64  `yaml:"SlowdownFactor"`
-	StartState     string `yaml:"StartState"`
-	PlaybackFile   string `yaml:"PlaybackFile"`
-	RecordToFile   bool   `yaml:"RecordToFile"`
-	RecordingFile  string `yaml:"RecordingFile"`
-	LoadTest       bool   `yaml:"LoadTest"`
-	TestFile       string `yaml:"TestFile"`
+	SlowdownFactor        int64  `yaml:"SlowdownFactor"`
+	StartState            string `yaml:"StartState"`
+	PlaybackFile          string `yaml:"PlaybackFile"`
+	RecordToFile          bool   `yaml:"RecordToFile"`
+	RecordingFile         string `yaml:"RecordingFile"`
+	LoadTest              bool   `yaml:"LoadTest"`
+	TestFile              string `yaml:"TestFile"`
+	AllowOverlappingDrags bool   `yaml:"AllowOverlappingDrags"`
 }
 
 type UserData struct {
@@ -217,6 +218,7 @@ func main() {
 		panic(fmt.Errorf("invalid g.StartState: %s", g.StartState))
 	}
 
+	g.playthrough.AllowOverlappingDrags = g.AllowOverlappingDrags
 	g.world = NewWorldFromPlaythrough(g.playthrough)
 
 	// The last input caused the crash, so run the whole playthrough except the
