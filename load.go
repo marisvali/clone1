@@ -34,6 +34,7 @@ func (g *Gui) LoadGuiData() {
 			filename := fmt.Sprintf("data/gui/%02d.png", i)
 			g.imgBrick[i] = LoadImage(g.FSys, filename)
 		}
+		g.imgBrickFrame = LoadImage(g.FSys, "data/gui/brick-frame.png")
 		for i := int64(0); i <= 9; i++ {
 			filename := fmt.Sprintf("data/gui/digit%d.png", i)
 			g.imgDigit[i] = LoadImage(g.FSys, filename)

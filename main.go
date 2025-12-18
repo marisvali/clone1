@@ -68,6 +68,7 @@ type Gui struct {
 	FSys                FS
 	imgBlank            *ebiten.Image
 	imgBrick            [31]*ebiten.Image
+	imgBrickFrame       *ebiten.Image
 	imgDigit            [10]*ebiten.Image
 	imgFalling          *ebiten.Image
 	imgCursor           *ebiten.Image

@@ -237,6 +237,12 @@ func (g *Gui) DrawBricks(worldScreen *ebiten.Image, s BrickState) {
 		DrawSprite(worldScreen, img, float64(pos.X), float64(pos.Y),
 			float64(BrickPixelSize),
 			float64(BrickPixelSize))
+		if b.Val >= 20 {
+			DrawSprite(worldScreen, g.imgBrickFrame,
+				float64(pos.X), float64(pos.Y),
+				float64(BrickPixelSize),
+				float64(BrickPixelSize))
+		}
 		if b.ChainedTo > 0 && b.State != Follower {
 			c1 := b.Bounds.Center()
 			c2 := g.world.GetBrick(b.ChainedTo).Bounds.Center()
