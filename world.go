@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"time"
 )
 
 // SimulationVersion is the version of the simulation currently implemented
@@ -421,7 +422,9 @@ func (w *World) ResetTimerCooldown() {
 }
 
 func (w *World) Initialize() {
-	w.RSeed(w.Seed)
+	// w.RSeed(w.Seed)
+	// TODO: this is here for testing, remove it afterwards
+	w.RSeed(time.Now().UnixNano())
 	w.Bricks = w.Bricks[:0]
 	if len(w.OriginalBricks) == 0 {
 		w.CreateFirstRowsOfBricks()
@@ -1040,9 +1043,11 @@ func (w *World) CreateNewRowOfBricks(maxVal int64) {
 		newPos := CanonicalPosToPixelPos(Pt{x, -1})
 		posAbove := Pt{x, 0}
 		forbiddenValue := int64(0)
-		for _, b := range w.Bricks {
+		var brickAbove *Brick
+		for i, b := range w.Bricks {
 			if b.CanonicalPos == posAbove {
 				forbiddenValue = b.Val
+				brickAbove = &w.Bricks[i]
 			}
 		}
 
@@ -1055,6 +1060,26 @@ func (w *World) CreateNewRowOfBricks(maxVal int64) {
 		}
 
 		w.Bricks = append(w.Bricks, w.NewBrick(newPos, val))
+
+		currentMaxVal := w.CurrentMaxVal()
+		// Generate chains, when max val is 10 or more.
+		if currentMaxVal >= 10 {
+			// percentage based on max value
+			if brickAbove != nil && brickAbove.State == Canonical {
+				w.TryToChainBricks(&w.Bricks[len(w.Bricks)-1], brickAbove)
+			}
+			if x > 0 {
+				w.TryToChainBricks(&w.Bricks[len(w.Bricks)-2], &w.Bricks[len(w.Bricks)-1])
+			}
+		}
+	}
+}
+
+func (w *World) TryToChainBricks(b1 *Brick, b2 *Brick) {
+	// percentage based on max value
+	percentage := w.CurrentMaxVal() + 6
+	if w.RInt(1, 100) < percentage && b1.ChainedTo == 0 && b2.ChainedTo == 0 {
+		ChainBricks(b1, b2)
 	}
 }
 
