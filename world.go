@@ -1081,14 +1081,17 @@ func (w *World) CreateNewRowOfBricks(maxVal int64) {
 		}
 	}
 
-	// Add chains.
-	//
+	// Add chains, if we are at 10 or more.
+	currentMaxVal := w.CurrentMaxVal()
+	if currentMaxVal < 10 {
+		return
+	}
+
 	// Compute how many chains there will be in this new row.
 	// On average, the number of chains per row = (currentMaxVal - 1) / 10.
 	// Since this will usually be a decimal number, we add the integral part
 	// and then we increase by 1 randomly, where the chance of increasing by 1
 	// depends on the decimal part.
-	currentMaxVal := w.CurrentMaxVal()
 	nChainsToAdd := (currentMaxVal - 1) / 10
 	if w.RInt(0, 10) < (currentMaxVal-1)%10 {
 		nChainsToAdd++
