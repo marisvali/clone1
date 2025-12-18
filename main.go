@@ -121,6 +121,7 @@ type Config struct {
 	LoadTest              bool   `yaml:"LoadTest"`
 	TestFile              string `yaml:"TestFile"`
 	AllowOverlappingDrags bool   `yaml:"AllowOverlappingDrags"`
+	DisplayFPS            bool   `yaml:"DisplayFPS"`
 }
 
 type UserData struct {

@@ -6,3 +6,4 @@ PlaybackFile: ""
 # true - record to file, false - don't record
 RecordToFile: false
 RecordingFile: ""
+DisplayFPS: false

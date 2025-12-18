@@ -124,24 +124,26 @@ func (g *Gui) DrawPlayScreen(screen *ebiten.Image) {
 		})
 	}
 
-	g.DrawText(screen, fmt.Sprintf("ActualTPS: %f", ebiten.ActualTPS()), false,
-		false,
-		color.NRGBA{
-			R: 0,
-			G: 100,
-			B: 0,
-			A: 255,
-		})
-	g.DrawText(screen, fmt.Sprintf("ActualTPS: %f ActualFPS: %f",
-		ebiten.ActualTPS(), ebiten.ActualFPS()),
-		false,
-		false,
-		color.NRGBA{
-			R: 0,
-			G: 100,
-			B: 0,
-			A: 255,
-		})
+	if g.DisplayFPS {
+		g.DrawText(screen, fmt.Sprintf("ActualTPS: %f", ebiten.ActualTPS()), false,
+			false,
+			color.NRGBA{
+				R: 0,
+				G: 100,
+				B: 0,
+				A: 255,
+			})
+		g.DrawText(screen, fmt.Sprintf("ActualTPS: %f ActualFPS: %f",
+			ebiten.ActualTPS(), ebiten.ActualFPS()),
+			false,
+			false,
+			color.NRGBA{
+				R: 0,
+				G: 100,
+				B: 0,
+				A: 255,
+			})
+	}
 
 	if g.state == Playback || g.state == DebugCrash {
 		pos := g.ScreenToGame(g.virtualPointerPos)
