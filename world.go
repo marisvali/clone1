@@ -598,13 +598,29 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 }
 
 func (w *World) NoMoreMergesArePossible() bool {
-	valExists := map[int64]bool{}
+	// Group bricks by their value.
+	groups := map[int64][]*Brick{}
 	for i := range w.Bricks {
-		if valExists[w.Bricks[i].Val] {
-			return false
-		}
-		valExists[w.Bricks[i].Val] = true
+		b := &w.Bricks[i]
+		groups[b.Val] = append(groups[b.Val], b)
 	}
+
+	// Go through each group and check if it contains bricks that could be
+	// merged.
+	for _, g := range groups {
+		for i := range g {
+			for j := i + 1; j < len(g); j++ {
+				b1 := g[i]
+				b2 := g[j]
+				// We can merge b1 to b2 if they are not chained to each other.
+				if b1.ChainedTo != b2.Id {
+					// A merge is possible.
+					return false
+				}
+			}
+		}
+	}
+
 	return true
 }
 
