@@ -203,6 +203,7 @@ func main() {
 		g.state = Playback
 		g.enableDebugAreas = true
 		g.playthrough = DeserializePlaythrough(ReadFile(g.PlaybackFile))
+		g.world = NewWorldFromPlaythrough(g.playthrough)
 	} else if g.StartState == "DebugCrash" {
 		g.state = DebugCrash
 		g.enableDebugAreas = true
@@ -215,6 +216,7 @@ func main() {
 		// results visually
 		CheckCrashes = false
 		g.playthrough = DeserializePlaythrough(ReadFile(g.PlaybackFile))
+		g.world = NewWorldFromPlaythrough(g.playthrough)
 	} else if g.StartState == "Play" {
 		g.state = PlayScreen
 		if g.LoadTest {
@@ -226,9 +228,7 @@ func main() {
 	} else {
 		panic(fmt.Errorf("invalid g.StartState: %s", g.StartState))
 	}
-
 	g.playthrough.AllowOverlappingDrags = g.AllowOverlappingDrags
-	g.InitializeWorldToNewGame()
 
 	// The last input caused the crash, so run the whole playthrough except the
 	// last input. This gives me a chance to see the current state of the world
@@ -248,6 +248,7 @@ func main() {
 func (g *Gui) InitializeWorldToNewGame() {
 	g.playthrough.Id = uuid.New()
 	g.playthrough.Seed = time.Now().UnixNano()
+	g.playthrough.History = g.playthrough.History[:0]
 	g.world = NewWorldFromPlaythrough(g.playthrough)
 }
 
