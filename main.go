@@ -7,6 +7,7 @@ import (
 	"golang.org/x/image/font"
 	_ "image/png"
 	"os"
+	"time"
 )
 
 // ReleaseVersion is the version of an executable built and given to someone
@@ -215,6 +216,7 @@ func main() {
 			LoadYAML(g.FSys, g.TestFile, &test)
 			g.playthrough.Level = test.GetLevel()
 		}
+		g.playthrough.Seed = time.Now().UnixNano()
 	} else {
 		panic(fmt.Errorf("invalid g.StartState: %s", g.StartState))
 	}

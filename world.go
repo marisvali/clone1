@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"slices"
-	"time"
 )
 
 // SimulationVersion is the version of the simulation currently implemented
@@ -422,9 +421,7 @@ func (w *World) ResetTimerCooldown() {
 }
 
 func (w *World) Initialize() {
-	// w.RSeed(w.Seed)
-	// TODO: this is here for testing, remove it afterwards
-	w.RSeed(time.Now().UnixNano())
+	w.RSeed(w.Seed)
 	w.Bricks = w.Bricks[:0]
 	if len(w.OriginalBricks) == 0 {
 		w.CreateFirstRowsOfBricks()
