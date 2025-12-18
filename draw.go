@@ -8,6 +8,8 @@ import (
 )
 
 func (g *Gui) Draw(screen *ebiten.Image) {
+	defer g.HandlePanic()
+
 	// The screen bitmap has the aspect ratio of the application window. We fill
 	// it with some background. Then, we select the area inside of screen on
 	// which we draw all the actually interesting elements of our gameScreen.

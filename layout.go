@@ -51,6 +51,8 @@ const ChainWidth = int64(43)
 const ChainHeight = int64(135)
 
 func (g *Gui) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
+	defer g.HandlePanic()
+
 	// I receive the application window's actual width and height, via
 	// outsideWidth, outsideHeight. I have to return the size I want, in pixels,
 	// for the bitmap that will be drawn in the window.

@@ -8,6 +8,8 @@ import (
 )
 
 func (g *Gui) Update() error {
+	defer g.HandlePanic()
+
 	if g.folderWatcher1.FolderContentsChanged() {
 		g.LoadGuiData()
 	}
@@ -22,8 +24,7 @@ func (g *Gui) Update() error {
 			LoadYAML(g.FSys, g.TestFile, &test)
 			g.playthrough.Level = test.GetLevel()
 		}
-		g.playthrough.AllowOverlappingDrags = g.AllowOverlappingDrags
-		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.InitializeWorldToNewGame()
 	}
 
 	g.pointer = g.GetPointerState()
@@ -56,7 +57,7 @@ func (g *Gui) Update() error {
 
 func (g *Gui) UpdateHomeScreen() {
 	if g.JustPressed(playScreenMenuButton) {
-		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.InitializeWorldToNewGame()
 		g.state = PlayScreen
 	}
 }
@@ -147,7 +148,7 @@ func (g *Gui) UpdatePausedScreen() {
 		g.state = PlayScreen
 	}
 	if g.JustPressed(pausedScreenRestartButton) {
-		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.InitializeWorldToNewGame()
 		g.state = PlayScreen
 	}
 	if g.JustPressed(pausedScreenHomeButton) {
@@ -157,7 +158,7 @@ func (g *Gui) UpdatePausedScreen() {
 
 func (g *Gui) UpdateGameOverScreen() {
 	if g.JustPressed(gameOverScreenRestartButton) {
-		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.InitializeWorldToNewGame()
 		g.state = PlayScreen
 	}
 	if g.JustPressed(gameOverScreenHomeButton) {
@@ -167,7 +168,7 @@ func (g *Gui) UpdateGameOverScreen() {
 
 func (g *Gui) UpdateGameWonScreen() {
 	if g.JustPressed(gameWonScreenRestartButton) {
-		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.InitializeWorldToNewGame()
 		g.state = PlayScreen
 	}
 	if g.JustPressed(gameWonScreenHomeButton) {

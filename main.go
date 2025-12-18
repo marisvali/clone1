@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/hajimehoshi/ebiten/v2"
 	"golang.org/x/image/font"
 	_ "image/png"
@@ -117,6 +118,7 @@ type Config struct {
 	StartState            string `yaml:"StartState"`
 	PlaybackFile          string `yaml:"PlaybackFile"`
 	RecordToFile          bool   `yaml:"RecordToFile"`
+	RecordToFileOnError   bool   `yaml:"RecordToFileOnError"`
 	RecordingFile         string `yaml:"RecordingFile"`
 	LoadTest              bool   `yaml:"LoadTest"`
 	TestFile              string `yaml:"TestFile"`
@@ -141,13 +143,15 @@ type Animations struct {
 }
 
 func main() {
+	var g Gui
+	defer g.HandlePanic()
 	// ebiten.SetWindowSize(900, 900)
 	ebiten.SetWindowPosition(1000, 100)
 
-	var g Gui
 	g.playthrough.InputVersion = InputVersion
 	g.playthrough.SimulationVersion = SimulationVersion
 	g.playthrough.ReleaseVersion = ReleaseVersion
+
 	g.username = getUsername()
 	g.UserData = LoadUserData(g.username)
 	// A channel size of 10 means the channel will buffer 10 inputs before it is
@@ -217,13 +221,13 @@ func main() {
 			LoadYAML(g.FSys, g.TestFile, &test)
 			g.playthrough.Level = test.GetLevel()
 		}
-		g.playthrough.Seed = time.Now().UnixNano()
+		g.InitializeWorldToNewGame()
 	} else {
 		panic(fmt.Errorf("invalid g.StartState: %s", g.StartState))
 	}
 
 	g.playthrough.AllowOverlappingDrags = g.AllowOverlappingDrags
-	g.world = NewWorldFromPlaythrough(g.playthrough)
+	g.InitializeWorldToNewGame()
 
 	// The last input caused the crash, so run the whole playthrough except the
 	// last input. This gives me a chance to see the current state of the world
@@ -238,4 +242,54 @@ func main() {
 
 	err := ebiten.RunGame(&g)
 	Check(err)
+}
+
+func (g *Gui) InitializeWorldToNewGame() {
+	g.playthrough.Id = uuid.New()
+	g.playthrough.Seed = time.Now().UnixNano()
+	g.world = NewWorldFromPlaythrough(g.playthrough)
+}
+
+func (g *Gui) HandlePanic() {
+	r := recover()
+	if r == nil {
+		// No panic, nothing to do.
+		return
+	}
+	errorMsg := StackTrace(r)
+
+	// Write to files first, as this should be more reliable than http.
+	if g.RecordToFileOnError {
+		WriteFile(g.RecordingFile, g.playthrough.Serialize())
+		timestamp := time.Now().Format("2006-01-02 15:04:05")
+		logMessage := fmt.Sprintf(
+			"----------------------------------------\n%s %s",
+			timestamp, errorMsg)
+		AppendToFile("clone1.log", logMessage)
+		timestamp = time.Now().Format("20060102-150405")
+		filename := fmt.Sprintf("error-%s.clone1", timestamp)
+		idx := 1
+		for {
+			if !FileExists(g.FSys, filename) {
+				break
+			}
+			idx++
+			filename = fmt.Sprintf("error-%s-%02d.clone1", timestamp, idx)
+		}
+		WriteFile(filename, g.playthrough.Serialize())
+	}
+
+	// Log the error via HTTP (this is the only thing that will have any effect
+	// for errors that happen in the browser, from WASM).
+	LogErrorHttp(
+		g.username,
+		g.playthrough.ReleaseVersion,
+		g.playthrough.SimulationVersion,
+		g.playthrough.InputVersion,
+		g.playthrough.Id,
+		errorMsg,
+		g.playthrough.Serialize())
+
+	// Resume panic, we have no recovery solutions.
+	panic(r)
 }

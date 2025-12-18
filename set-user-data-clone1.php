@@ -5,7 +5,7 @@ $password = "comeonthough";
 $dbname = "playfulp_clone1";
 
 function LogInfo($message) {
-	file_put_contents("./set-user-data-clone1.log", "INFO: " . $message . "\n", FILE_APPEND);
+	// file_put_contents("./set-user-data.log", "INFO: " . $message . "\n", FILE_APPEND);
 }
 
 LogInfo("Start.");
