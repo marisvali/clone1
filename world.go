@@ -1037,6 +1037,11 @@ func (w *World) CurrentMaxVal() int64 {
 }
 
 func (w *World) CreateNewRowOfBricks(maxVal int64) {
+	type BrickPair struct {
+		b1 *Brick
+		b2 *Brick
+	}
+	var possibleChains []BrickPair
 	for x := range NCols {
 		// Get a value that is different from the value of the brick right
 		// above (if there is a brick right above).
@@ -1061,25 +1066,72 @@ func (w *World) CreateNewRowOfBricks(maxVal int64) {
 
 		w.Bricks = append(w.Bricks, w.NewBrick(newPos, val))
 
-		currentMaxVal := w.CurrentMaxVal()
-		// Generate chains, when max val is 10 or more.
-		if currentMaxVal >= 10 {
-			// percentage based on max value
-			if brickAbove != nil && brickAbove.State == Canonical {
-				w.TryToChainBricks(&w.Bricks[len(w.Bricks)-1], brickAbove)
-			}
-			if x > 0 {
-				w.TryToChainBricks(&w.Bricks[len(w.Bricks)-2], &w.Bricks[len(w.Bricks)-1])
-			}
+		if brickAbove != nil &&
+			brickAbove.State == Canonical &&
+			brickAbove.ChainedTo == 0 {
+			// Vertical chain possible.
+			possibleChains = append(possibleChains,
+				BrickPair{
+					&w.Bricks[len(w.Bricks)-1],
+					brickAbove})
+		}
+		if x > 0 {
+			// Horizontal chain possible.
+			possibleChains = append(possibleChains,
+				BrickPair{
+					&w.Bricks[len(w.Bricks)-2],
+					&w.Bricks[len(w.Bricks)-1]})
 		}
 	}
-}
 
-func (w *World) TryToChainBricks(b1 *Brick, b2 *Brick) {
-	// percentage based on max value
-	percentage := w.CurrentMaxVal() + 6
-	if w.RInt(1, 100) < percentage && b1.ChainedTo == 0 && b2.ChainedTo == 0 {
-		ChainBricks(b1, b2)
+	// Add chains.
+	//
+	// Compute how many chains there will be in this new row.
+	// On average, the number of chains per row = (currentMaxVal - 1) / 10.
+	// Since this will usually be a decimal number, we add the integral part
+	// and then we increase by 1 randomly, where the chance of increasing by 1
+	// depends on the decimal part.
+	currentMaxVal := w.CurrentMaxVal()
+	nChainsToAdd := (currentMaxVal - 1) / 10
+	if w.RInt(0, 10) < (currentMaxVal-1)%10 {
+		nChainsToAdd++
+	}
+
+	// Add chains randomly to valid chain positions until we run out of chains
+	// to add or we run out of valid chain positions.
+	for {
+		if nChainsToAdd == 0 {
+			break
+		}
+		if len(possibleChains) == 0 {
+			// This can happen in rare cases. The maximum value before the game
+			// is won is 29, so the maximum value for nChainsToAdd is 3.
+			// If the new row is [1, 2, 3, 4, 5, 6] you can place one chain
+			// between bricks 2 and 3, then another between 4 and 5, and no more
+			// horizontal chains are possible. If you can't add vertical chains
+			// betewen 1 or 6 and the bricks above them, you just ran out of
+			// places to add chains to.
+			break
+		}
+		chosenOne := w.RInt(int64(0), int64(len(possibleChains)-1))
+		c := possibleChains[chosenOne]
+		ChainBricks(c.b1, c.b2)
+		possibleChains = Remove(possibleChains, int(chosenOne))
+		nChainsToAdd--
+
+		// A brick might appear multiple times in possibleChains, because it
+		// may be chained to the brick above or the brick next to it. So remove
+		// entries in possibleChains which include the recently chained bricks.
+		n := 0
+		for i, p := range possibleChains {
+			containsNewlyChainedBricks :=
+				p.b1 == c.b1 || p.b1 == c.b2 || p.b2 == c.b1 || p.b2 == c.b2
+			if !containsNewlyChainedBricks {
+				possibleChains[n] = possibleChains[i]
+				n++
+			}
+		}
+		possibleChains = possibleChains[:n]
 	}
 }
 
