@@ -169,13 +169,13 @@ func main() {
 	// full and it blocks. Hopefully, when uploading data, a size of 10 is
 	// sufficient.
 	g.uploadDataChannel = make(chan uploadData, 10)
-	go UploadPlaythroughs(g.uploadDataChannel)
+	go g.UploadPlaythroughs(g.uploadDataChannel)
 	g.UserData = LoadUserData(g.username)
 	// A channel size of 10 means the channel will buffer 10 inputs before it is
 	// full and it blocks. Hopefully, when uploading data, a size of 10 is
 	// sufficient.
 	g.uploadUserDataChannel = make(chan UserData, 10)
-	go UploadUserData(g.username, g.uploadUserDataChannel)
+	go g.UploadUserData(g.username, g.uploadUserDataChannel)
 	g.FrameSkipAltArrow = 1
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
@@ -266,11 +266,19 @@ func (g *Gui) InitializeWorldToNewGame() {
 	g.playthrough.Seed = time.Now().UnixNano()
 	g.playthrough.History = g.playthrough.History[:0]
 	g.playthrough.AllowOverlappingDrags = g.AllowOverlappingDrags
-	InitializeIdInDbHttp(g.username,
-		g.playthrough.ReleaseVersion,
-		g.playthrough.SimulationVersion,
-		g.playthrough.InputVersion,
-		g.playthrough.Id)
+	for i := 1; i < 3; i++ {
+		// This might fail, but we really do not care that much. The game should
+		// not be interrupted by this function failing. If it does fail, just
+		// try a couple more times, then give up.
+		err := InitializeIdInDbHttp(g.username,
+			g.playthrough.ReleaseVersion,
+			g.playthrough.SimulationVersion,
+			g.playthrough.InputVersion,
+			g.playthrough.Id)
+		if err == nil {
+			break
+		}
+	}
 	g.world = NewWorldFromPlaythrough(g.playthrough)
 }
 
@@ -305,7 +313,9 @@ func (g *Gui) HandlePanic() {
 
 	// Log the error via HTTP (this is the only thing that will have any effect
 	// for errors that happen in the browser, from WASM).
-	LogErrorHttp(
+	// Ignore errors, because if this fails and we are in WASM there is nothing
+	// more we can do anyway to handle the error.
+	_ = LogErrorHttp(
 		g.username,
 		g.playthrough.ReleaseVersion,
 		g.playthrough.SimulationVersion,
@@ -318,7 +328,7 @@ func (g *Gui) HandlePanic() {
 	// panic(r)
 	// TODO: decide best course of action here, panic or display error to user
 	g.panicHappened = true
-	g.panicMsg = errorMsg[:1300]
+	g.panicMsg = errorMsg[:min(len(errorMsg), 1300)]
 }
 
 func (g *Gui) uploadCurrentWorld() {
@@ -337,18 +347,28 @@ func (g *Gui) uploadCurrentWorld() {
 		g.playthrough.Clone()}
 }
 
-func UploadPlaythroughs(ch chan uploadData) {
+func (g *Gui) UploadPlaythroughs(ch chan uploadData) {
+	defer g.HandlePanic()
+
 	for {
 		// Receive a playthrough from the channel.
 		// Blocks until a playthrough is received.
 		data := <-ch
 
 		// Upload the data.
-		UploadDataToDbHttp(data.user,
-			data.releaseVersion,
-			data.simulationVersion,
-			data.inputVersion,
-			data.playthrough.Id,
-			data.playthrough.Serialize())
+		// This might fail, but we really do not care that much. The game should
+		// not be interrupted by this function failing. If it does fail, just
+		// try a couple more times, then give up.
+		for i := 1; i < 3; i++ {
+			err := UploadDataToDbHttp(data.user,
+				data.releaseVersion,
+				data.simulationVersion,
+				data.inputVersion,
+				data.playthrough.Id,
+				data.playthrough.Serialize())
+			if err == nil {
+				break
+			}
+		}
 	}
 }

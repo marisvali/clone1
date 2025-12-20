@@ -388,13 +388,23 @@ func (g *Gui) GetPointerState() PointerState {
 }
 
 func LoadUserData(username string) (data UserData) {
-	s := GetUserDataHttp(username)
+	var s string
+	for i := 1; i < 3; i++ {
+		// This might fail, but we really do not care that much. The game should
+		// not be interrupted by this function failing. If it does fail, just
+		// try a couple more times, then give up.
+		var err error
+		s, err = GetUserDataHttp(username)
+		if err == nil {
+			break
+		}
+	}
 	err := yaml.Unmarshal([]byte(s), &data)
 	Check(err)
 	return
 }
 
-func UploadUserData(username string, ch chan UserData) {
+func (g *Gui) UploadUserData(username string, ch chan UserData) {
 	for {
 		// Receive a struct from the channel.
 		// Blocks until a struct is received.
@@ -403,6 +413,14 @@ func UploadUserData(username string, ch chan UserData) {
 		// Upload the data.
 		bytes, err := yaml.Marshal(data)
 		Check(err)
-		SetUserDataHttp(username, string(bytes))
+		for i := 1; i < 3; i++ {
+			// This might fail, but we really do not care that much. The game
+			// should not be interrupted by this function failing. If it does
+			// fail, just try a couple more times, then give up.
+			err = SetUserDataHttp(username, string(bytes))
+			if err == nil {
+				break
+			}
+		}
 	}
 }
