@@ -695,9 +695,17 @@ func (w *World) UpdateFallingBricks() {
 	}
 }
 
+func (w *World) UpdateCanonicalBricks() {
+	w.MarkFallingBricks()
+	w.ConvergeTowardsCanonicalPositions()
+}
+
+var bricksBuffer []*Brick = make([]*Brick, 0, NCols*(NRows+1))
+
 // MarkFallingBricks checks if any canonical brick should start falling and
 // changes its state.
 func (w *World) MarkFallingBricks() {
+	// Checks if any canonical brick should start falling.
 	for i := range w.Bricks {
 		b := &w.Bricks[i]
 
@@ -786,38 +794,63 @@ func (w *World) MarkFallingBricks() {
 	}
 }
 
-var bricksBuffer []*Brick = make([]*Brick, 0, NCols*(NRows+1))
-
-func (w *World) UpdateCanonicalBricks() {
-	w.MarkFallingBricks()
-
-	// Decide the target position for each canonical brick:
-	// - Assign each brick to a column. Usually canonical bricks are firmly in
-	// a column or another. But a dragged brick becomes canonical when released
-	// and it can be released in any position. So we may always have at least
-	// one canonical brick in some non-standard position, e.g. between two
-	// columns. But, even if a brick is between two columns, it is closer to one
-	// than another.
-	// - For the bricks in a column, decide which goes into what position. The
-	// easiest way to do this is to get the bottom one first, decide that one
-	// cannot move any lower, so it gets the bottom position. The next one must
-	// necessarily get the next available position, on top of the first one,
-	// and so on.
-	// - This may result in some bricks moving up in order to fit well with the
-	// others. But normally they will travel a short distance and it should look
-	// natural to the player.
-	// - An exception has to be made for bricks that have the same value. If two
-	// bricks with the same value compete for the same spot, they are allowed to
-	// go for it. This is because they are competing because they are probably
-	// already overlapping significantly, which means a merge is imminent. It
-	// looks a little ridiculous if they go on top of each other, then one falls
-	// on the other and they merge.
+func (w *World) ConvergeTowardsCanonicalPositions() {
+	// Motivation
+	// ----------
 	//
-	// By following this algorithm, we guarantee that bricks end up in valid
-	// positions and any intersections get solved relatively quickly in a way
-	// that feels natural.
+	// This game requires bricks to stay in their place until they are moved
+	// around by the player or they fall because there's nothing underneath
+	// them.
 	//
-	// Assign each brick to a column.
+	// However, bricks are moved around by the player and often released in
+	// non-standard positions. When they fall they might travel a little below
+	// the standard position before they hit a brick and need to stop.
+	//
+	// There is also the issue of edge cases where bricks that should not
+	// intersect can be made to intersect by arranging just the right
+	// combination of bricks and having merges occur.
+	//
+	// General solution
+	// ----------------
+	//
+	// The above problems can all be solved by having an algorithm with the
+	// following characteristics:
+	// - Decide a valid position for each brick.
+	// - Minimize travel distances in some way that looks good in the average
+	// case.
+	// - Have bricks travel each frame towards their positions without
+	// considering any obstacles.
+	//
+	// Design
+	// ------
+	//
+	// The algorithm goes through each brick and assigns it a canonical position
+	// that is yet unoccupied. Once the position is occupied, future bricks must
+	// be assigned different positions.
+	//
+	// If two bricks are close to the same canonical positions, we will get a
+	// conflict. One must have priority over the other. The other one must be
+	// assigned to a different canonical position.
+	//
+	// The floor and the left and right walls impose hard constraints, bricks
+	// cannot move beyond them. So, when there is a conflict, search upwards for
+	// the next valid position. Sort the bricks by their Y coordinate, assign
+	// positions starting with the lowest Y, going up. This way we hope to
+	// achieve minimal movements in the average case.
+	//
+	// Correctness
+	// -----------
+	//
+	// Since the algorithm always assigns each brick to its own canonical and
+	// unoccupied position, it should always push bricks towards a valid state
+	// where they don't overlap. Since we go from bottom to top, bricks are not
+	// usually assigned positions that have nothing underneath them. If this
+	// ever happens momentarily, the brick falls and will then converge to a
+	// canonical position that has something underneath it.
+	//
+	// The biggest concern with the algorithm is for the adjustments to look
+	// natural in the average case, and somewhat natural in edge cases. This has
+	// been tested manually and I can confirm is looks natural enough.
 
 	// Sort bricks.
 	slices.SortStableFunc(w.Bricks, func(b1, b2 Brick) int {
