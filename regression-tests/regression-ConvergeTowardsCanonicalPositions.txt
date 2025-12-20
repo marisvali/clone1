@@ -1,0 +1,9 @@
+Setup
+-----
+
+There are bricks chained vertically, horizontally or without chains. The AllowOverlappingDrags flag is enabled and the player drags bricks around and makes them overlap.
+
+Test
+----
+
+Every time the player lets go of a brick that now overlaps other bricks, the game moves the bricks around in what seems like a natural way, so that a final coherent state is reached where bricks rest one each other without overlapping.

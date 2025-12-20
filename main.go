@@ -265,6 +265,7 @@ func (g *Gui) InitializeWorldToNewGame() {
 	g.playthrough.Id = uuid.New()
 	g.playthrough.Seed = time.Now().UnixNano()
 	g.playthrough.History = g.playthrough.History[:0]
+	g.playthrough.AllowOverlappingDrags = g.AllowOverlappingDrags
 	InitializeIdInDbHttp(g.username,
 		g.playthrough.ReleaseVersion,
 		g.playthrough.SimulationVersion,

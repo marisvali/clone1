@@ -638,6 +638,19 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 
 	if w.AllowOverlappingDrags {
 		targetPos := input.Pos.Plus(w.DraggingOffset)
+		// Clip targetPos to within the bounds of the game area.
+		if targetPos.X < 0 {
+			targetPos.X = 0
+		}
+		if targetPos.Y < 0 {
+			targetPos.Y = 0
+		}
+		if targetPos.X > PlayAreaWidth-BrickPixelSize {
+			targetPos.X = PlayAreaWidth - BrickPixelSize
+		}
+		if targetPos.Y > PlayAreaHeight+BrickMarginPixelSize {
+			targetPos.Y = PlayAreaHeight + BrickMarginPixelSize
+		}
 		w.MoveBrick(dragged, targetPos, w.DragSpeed, IgnoreObstacles)
 	} else {
 		// Get the set of rectangles the brick must not intersect.
