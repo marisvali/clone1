@@ -10,6 +10,18 @@ import (
 func (g *Gui) Draw(screen *ebiten.Image) {
 	defer g.HandlePanic()
 
+	if g.panicHappened {
+		g.DrawText(screen, g.panicMsg, false,
+			false,
+			color.NRGBA{
+				R: 0,
+				G: 100,
+				B: 0,
+				A: 255,
+			})
+		return
+	}
+
 	// The screen bitmap has the aspect ratio of the application window. We fill
 	// it with some background. Then, we select the area inside of screen on
 	// which we draw all the actually interesting elements of our gameScreen.

@@ -1,3 +1,5 @@
 /last-recording.clone1
 *.wasm
 data/*dev*.yaml
+*.clone1
+*.log

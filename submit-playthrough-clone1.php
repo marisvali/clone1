@@ -11,11 +11,11 @@ $password = "comeonthough";
 $dbname = "playfulp_clone1";
 
 function LogInfo($message) {
-// 	file_put_contents("./submit-playthrough.log", "INFO: " . $message . "\n", FILE_APPEND);
+ 	file_put_contents("./submit-playthrough-clone1.log", "INFO: " . $message . "\n", FILE_APPEND);
 }
 
 function LogError($message) {
-	file_put_contents("./submit-playthrough.log", "ERROR: " . $message . "\n", FILE_APPEND);
+	file_put_contents("./submit-playthrough-clone1.log", "ERROR: " . $message . "\n", FILE_APPEND);
     http_response_code(513);
 	die();
 }

@@ -112,6 +112,17 @@ type Gui struct {
 	uploadUserDataChannel chan UserData
 	visWorld              VisWorld
 	devModeEnabled        bool
+	uploadDataChannel     chan uploadData
+	panicHappened         bool
+	panicMsg              string
+}
+
+type uploadData struct {
+	user              string
+	releaseVersion    int64
+	simulationVersion int64
+	inputVersion      int64
+	playthrough       *Playthrough
 }
 
 type Config struct {
@@ -154,6 +165,11 @@ func main() {
 	g.playthrough.ReleaseVersion = ReleaseVersion
 
 	g.username = getUsername()
+	// A channel size of 10 means the channel will buffer 10 inputs before it is
+	// full and it blocks. Hopefully, when uploading data, a size of 10 is
+	// sufficient.
+	g.uploadDataChannel = make(chan uploadData, 10)
+	go UploadPlaythroughs(g.uploadDataChannel)
 	g.UserData = LoadUserData(g.username)
 	// A channel size of 10 means the channel will buffer 10 inputs before it is
 	// full and it blocks. Hopefully, when uploading data, a size of 10 is
@@ -249,6 +265,11 @@ func (g *Gui) InitializeWorldToNewGame() {
 	g.playthrough.Id = uuid.New()
 	g.playthrough.Seed = time.Now().UnixNano()
 	g.playthrough.History = g.playthrough.History[:0]
+	InitializeIdInDbHttp(g.username,
+		g.playthrough.ReleaseVersion,
+		g.playthrough.SimulationVersion,
+		g.playthrough.InputVersion,
+		g.playthrough.Id)
 	g.world = NewWorldFromPlaythrough(g.playthrough)
 }
 
@@ -293,5 +314,40 @@ func (g *Gui) HandlePanic() {
 		g.playthrough.Serialize())
 
 	// Resume panic, we have no recovery solutions.
-	panic(r)
+	// panic(r)
+	// TODO: decide best course of action here, panic or display error to user
+	g.panicHappened = true
+	g.panicMsg = errorMsg[:1300]
+}
+
+func (g *Gui) uploadCurrentWorld() {
+	// Pass a clone to the channel and not a serialized playthrough.
+	// Serialization takes much longer than cloning.
+	// Also, it is important for the channel to have some buffer, otherwise this
+	// call will block until the previous world instance was uploaded.
+	// If the connection to the server drops for a few seconds, either due to
+	// the player's connection or the server not being available, it will
+	// interrupt the gameplay.
+	g.uploadDataChannel <- uploadData{
+		g.username,
+		g.playthrough.ReleaseVersion,
+		g.playthrough.SimulationVersion,
+		g.playthrough.InputVersion,
+		g.playthrough.Clone()}
+}
+
+func UploadPlaythroughs(ch chan uploadData) {
+	for {
+		// Receive a playthrough from the channel.
+		// Blocks until a playthrough is received.
+		data := <-ch
+
+		// Upload the data.
+		UploadDataToDbHttp(data.user,
+			data.releaseVersion,
+			data.simulationVersion,
+			data.inputVersion,
+			data.playthrough.Id,
+			data.playthrough.Serialize())
+	}
 }

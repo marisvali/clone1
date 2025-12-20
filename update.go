@@ -63,7 +63,11 @@ func (g *Gui) UpdateHomeScreen() {
 }
 
 func (g *Gui) UpdatePlayScreen() {
+	if g.panicHappened {
+		return
+	}
 	if g.JustPressed(homeScreenMenuButton) {
+		g.uploadCurrentWorld()
 		g.state = PausedScreen
 		return
 	}
@@ -74,13 +78,16 @@ func (g *Gui) UpdatePlayScreen() {
 	input.JustReleased = g.pointer.JustReleased
 	input.Pos = g.ScreenToWorld(g.pointer.Pos)
 	if g.JustPressedKey(ebiten.KeyEscape) {
+		g.uploadCurrentWorld()
 		g.state = PausedScreen
 		return
 	}
 	if g.JustPressedKey(ebiten.KeyR) {
+		g.uploadCurrentWorld()
 		input.ResetWorld = true
 	}
 	if g.JustPressedKey(ebiten.KeyC) {
+		g.uploadCurrentWorld()
 		input.TriggerComingUp = true
 	}
 
@@ -116,6 +123,9 @@ func (g *Gui) UpdatePlayScreen() {
 		if g.RecordToFile {
 			WriteFile(g.RecordingFile, g.playthrough.Serialize())
 		}
+		if g.frameIdx%60 == 0 {
+			g.uploadCurrentWorld()
+		}
 
 		// Step the world.
 		g.world.Step(g.accumulatedInput)
@@ -134,9 +144,11 @@ func (g *Gui) UpdatePlayScreen() {
 	g.frameIdx++
 
 	if g.world.State == Lost {
+		g.uploadCurrentWorld()
 		g.state = GameOverScreen
 	}
 	if g.world.State == Won {
+		g.uploadCurrentWorld()
 		g.state = GameWonScreen
 	}
 }

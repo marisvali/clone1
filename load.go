@@ -69,7 +69,7 @@ func (g *Gui) LoadGuiData() {
 	Check(err)
 
 	g.defaultFont, err = opentype.NewFace(fontData, &opentype.FaceOptions{
-		Size:    44,
+		Size:    30,
 		DPI:     72,
 		Hinting: font.HintingVertical,
 	})
