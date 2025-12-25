@@ -1357,6 +1357,38 @@ const (
 	SlideOnObstacles
 )
 
+func Helper(b *Brick, targetPos Pt, nMaxPixels int64,
+	obstacles []Rectangle) (nPixelsLeft int64, dif Pt) {
+	var newR Rectangle
+	r := b.Bounds
+	newR, nPixelsLeft = MoveRect(r, targetPos, nMaxPixels, obstacles)
+	dif = newR.Min.Minus(r.Min)
+	return
+}
+
+func (w *World) MoveBrickStopAtObstacles(
+	b *Brick,
+	targetPos Pt,
+	nMaxPixels int64,
+	o GetObstaclesOption,
+) (nPixelsLeft int64) {
+
+	nPixelsLeft, dif := Helper(b, targetPos, nMaxPixels, w.GetObstacles(b, o))
+	if b.ChainedTo > 0 {
+		b2 := w.GetBrick(b.ChainedTo)
+		targetPos2 := b2.PixelPos.Plus(targetPos.Minus(b.PixelPos))
+		nPixelsLeft2, dif2 := Helper(b2, targetPos2, nMaxPixels,
+			w.GetObstacles(b2, o))
+		if nPixelsLeft2 > nPixelsLeft {
+			nPixelsLeft = nPixelsLeft2
+			dif = dif2
+		}
+	}
+
+	b.SetPixelPos(b.PixelPos.Plus(dif), w)
+	return
+}
+
 // MoveBrick should be the only function that changes the position of a brick.
 func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 	moveType MoveType) (hitObstacle bool) {
@@ -1375,38 +1407,9 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 	}
 
 	if moveType == StopAtFirstObstacleExceptTop {
-		if b.ChainedTo == 0 {
-			obstacles := w.GetObstacles(b, ExceptTop)
-			r := b.Bounds
-			newR, nPixelsLeft := MoveRect(r, targetPos, nMaxPixels, obstacles)
-			dif := newR.Min.Minus(r.Min)
-			b.SetPixelPos(b.PixelPos.Plus(dif), w)
-			return nPixelsLeft > 0
-		} else {
-			b2 := w.GetBrick(b.ChainedTo)
-			r := b.Bounds
-			r2 := b2.Bounds
-			obstacles := w.GetObstacles(b, ExceptTop)
-			obstacles2 := w.GetObstacles(b2, ExceptTop)
-			targetPos2 := b2.PixelPos.Plus(targetPos.Minus(b.PixelPos))
-
-			var dif, dif2 Pt
-			newRA, nPixelsLeftA := MoveRect(r, targetPos, nMaxPixels, obstacles)
-			dif = newRA.Min.Minus(r.Min)
-			newR2A, nPixelsLeft2A := MoveRect(r2, targetPos2, nMaxPixels, obstacles2)
-			dif2 = newR2A.Min.Minus(r2.Min)
-
-			if b2.PixelPos.Plus(dif2).Y < 0 {
-				println("got here 2")
-			}
-			if nPixelsLeft2A > nPixelsLeftA {
-				b.SetPixelPos(b.PixelPos.Plus(dif2), w)
-				return nPixelsLeft2A > 0
-			} else {
-				b.SetPixelPos(b.PixelPos.Plus(dif), w)
-				return nPixelsLeftA > 0
-			}
-		}
+		nPixelsLeft := w.MoveBrickStopAtObstacles(b, targetPos, nMaxPixels,
+			ExceptTop)
+		return nPixelsLeft > 0
 	}
 
 	if moveType == SlideOnObstacles {
@@ -1443,85 +1446,20 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 		// or "teleports" and the effect of the brick travelling is more
 		// pleasant. It gives more of a feeling that it is an actual solid
 		// object in solid space on which forces are acting.
-		if b.ChainedTo == 0 {
-			r := b.Bounds
-			obstacles := w.GetObstacles(b, IncludingTop)
 
-			// First, go as far as possible towards the target, in a straight line.
-			newR, nPixelsLeft := MoveRect(r, targetPos, nMaxPixels, obstacles)
+		// First, go as far as possible towards the target, in a straight line.
+		nPixelsLeft := w.MoveBrickStopAtObstacles(b, targetPos,
+			nMaxPixels, IncludingTop)
 
-			// Now, go towards the target's X as much as possible.
-			newR, nPixelsLeft = MoveRect(newR, Pt{targetPos.X, newR.Min.Y},
-				nPixelsLeft, obstacles)
+		// Now, go towards the target's X as much as possible.
+		nPixelsLeft = w.MoveBrickStopAtObstacles(b,
+			Pt{targetPos.X, b.Bounds.Min.Y}, nPixelsLeft, IncludingTop)
 
-			// Now, go towards the target's Y as much as possible.
-			newR, nPixelsLeft = MoveRect(newR, Pt{newR.Min.X, targetPos.Y},
-				nPixelsLeft, obstacles)
+		// Now, go towards the target's Y as much as possible.
+		nPixelsLeft = w.MoveBrickStopAtObstacles(b,
+			Pt{b.Bounds.Min.X, targetPos.Y}, nPixelsLeft, IncludingTop)
 
-			dif := newR.Min.Minus(r.Min)
-			b.SetPixelPos(b.PixelPos.Plus(dif), w)
-		} else {
-			b2 := w.GetBrick(b.ChainedTo)
-			r := b.Bounds
-			r2 := b2.Bounds
-			obstacles := w.GetObstacles(b, IncludingTop)
-			obstacles2 := w.GetObstacles(b2, IncludingTop)
-			targetPos2 := b2.PixelPos.Plus(targetPos.Minus(b.PixelPos))
-
-			var dif, dif2 Pt
-			newRA, nPixelsLeftA := MoveRect(r, targetPos, nMaxPixels, obstacles)
-			dif = newRA.Min.Minus(r.Min)
-			newR2A, nPixelsLeft2A := MoveRect(r2, targetPos2, nMaxPixels, obstacles2)
-			dif2 = newR2A.Min.Minus(r2.Min)
-
-			if b2.PixelPos.Plus(dif2).Y < 0 {
-				println("got here 2")
-			}
-			if nPixelsLeft2A > nPixelsLeftA {
-				b.SetPixelPos(b.PixelPos.Plus(dif2), w)
-			} else {
-				b.SetPixelPos(b.PixelPos.Plus(dif), w)
-			}
-
-			nMaxPixelsB := Max(nPixelsLeft2A, nPixelsLeftA)
-			r = b.Bounds
-			r2 = b2.Bounds
-			newRB, nPixelsLeftB := MoveRect(r, Pt{targetPos.X, r.Min.Y}, nMaxPixelsB, obstacles)
-			dif = newRB.Min.Minus(r.Min)
-			newR2B, nPixelsLeft2B := MoveRect(r2, Pt{targetPos2.X, r2.Min.Y}, nMaxPixelsB, obstacles2)
-			dif2 = newR2B.Min.Minus(r2.Min)
-
-			if b2.PixelPos.Plus(dif2).Y < 0 {
-				println("got here 2")
-			}
-			if b2.PixelPos.Plus(dif2).X > 500 {
-				// println("got here 3")
-			}
-			if nPixelsLeft2B > nPixelsLeftB {
-				b.SetPixelPos(b.PixelPos.Plus(dif2), w)
-			} else {
-				b.SetPixelPos(b.PixelPos.Plus(dif), w)
-			}
-
-			nMaxPixelsC := Max(nPixelsLeft2B, nPixelsLeftB)
-			r = b.Bounds
-			r2 = b2.Bounds
-			newRC, nPixelsLeftC := MoveRect(r, Pt{r.Min.X, targetPos.Y}, nMaxPixelsC, obstacles)
-			dif = newRC.Min.Minus(r.Min)
-			newR2C, nPixelsLeft2C := MoveRect(r2, Pt{r2.Min.X, targetPos2.Y}, nMaxPixelsC, obstacles2)
-			dif2 = newR2C.Min.Minus(r2.Min)
-
-			if b2.PixelPos.Plus(dif2).Y < 0 {
-				println("got here 2")
-			}
-			if nPixelsLeft2C > nPixelsLeftC {
-				b.SetPixelPos(b.PixelPos.Plus(dif2), w)
-			} else {
-				b.SetPixelPos(b.PixelPos.Plus(dif), w)
-			}
-		}
-
-		return true
+		return nPixelsLeft > 0
 	}
 
 	panic("unhandled movement type")
