@@ -732,78 +732,37 @@ func (w *World) MarkFallingBricks() {
 			continue
 		}
 
-		// Skip bricks which currently intersect other bricks.
-		intersects := false
-		for _, otherB := range w.Bricks {
-			if b.Id != otherB.Id && b.Val != otherB.Val &&
-				otherB.Bounds.Intersects(b.Bounds) {
-				intersects = true
-				break
-			}
-		}
-		if intersects {
-			continue
-		}
-
-		if b.ChainedTo != 0 {
-			b2 := w.GetBrick(b.ChainedTo)
-			for _, otherB := range w.Bricks {
-				if b2.Id != otherB.Id && b2.Val != otherB.Val &&
-					otherB.Bounds.Intersects(b2.Bounds) {
-					intersects = true
-					break
-				}
-			}
-			if intersects {
-				continue
-			}
-		}
-
-		// Check if there's anything under this brick.
-		canPosUnder := b.CanonicalPos
-		canPosUnder.Y--
-		if canPosUnder.Y < 0 {
+		if b.CanonicalPos.Y == 0 {
 			// The brick is already at the bottom, it cannot fall any lower.
 			continue
 		}
 
-		// Check the slot underneath the brick.
-		slot := BrickBounds(CanonicalPosToPixelPos(canPosUnder))
-		for j := range w.Bricks {
-			if i != j && b.Val != w.Bricks[j].Val &&
-				w.Bricks[j].Bounds.Intersects(slot) {
-				intersects = true
-				break
-			}
-		}
-		if intersects {
+		// Check if the brick or the slot underneath intersects other bricks.
+		obstacles := w.GetObstacles(b, IncludingTop)
+		r := b.Bounds
+		r.Max.Y += BrickPixelSize + BrickMarginPixelSize
+		if RectIntersectsRects(r, obstacles) {
 			continue
 		}
 
-		// Check the slot underneath the other brick.
 		if b.ChainedTo != 0 {
+			// Check the chained brick as well.
+			// Checking underneath the chained brick is only relevant for a
+			// horizontally chained bricked but it doesn't hurt logically or
+			// computationally for the vertically chained brick so do the same
+			// operation in both cases.
 			b2 := w.GetBrick(b.ChainedTo)
-			if b2.CanonicalPos.X == b.CanonicalPos.X+1 {
-				canPosUnder2 := b2.CanonicalPos
-				canPosUnder2.Y--
-				slot2 := BrickBounds(CanonicalPosToPixelPos(canPosUnder2))
-				for j := range w.Bricks {
-					if i != j && b2.Val != w.Bricks[j].Val &&
-						w.Bricks[j].Bounds.Intersects(slot2) {
-						intersects = true
-						break
-					}
-				}
-				if intersects {
-					continue
-				}
+			obstacles2 := w.GetObstacles(b2, IncludingTop)
+			r2 := b2.Bounds
+			r2.Max.Y += BrickPixelSize + BrickMarginPixelSize
+			if RectIntersectsRects(r2, obstacles2) {
+				continue
 			}
 		}
 
-		if !intersects {
-			b.State = Falling
-			b.FallingSpeed = 0
-		}
+		// Nothing is sustaining the brick, so it should start falling.
+		b.State = Falling
+		b.FallingSpeed = 0
 	}
 }
 
