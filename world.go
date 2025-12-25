@@ -830,7 +830,8 @@ func (w *World) ConvergeTowardsCanonicalPositions() {
 			// Bigger Y has priority (must appear first in the list).
 			return cmp.Compare(b2.PixelPos.Y, b1.PixelPos.Y)
 		} else {
-			// Smaller X has priority (must appear first in the list).
+			// When Y is the same, smaller X has priority (must appear first in
+			// the list).
 			return cmp.Compare(b1.PixelPos.X, b2.PixelPos.X)
 		}
 	})
@@ -847,51 +848,36 @@ func (w *World) ConvergeTowardsCanonicalPositions() {
 		// We need to find a position for b, in this column.
 		// We start off from b's current position.
 		targetCanPos := b.CanonicalPos
-		var chainedTargetCanPos Pt
+		var b2 *Brick
+		var targetCanPos2 Pt
+		if b.ChainedTo > 0 {
+			b2 = w.GetBrick(b.ChainedTo)
+			Assert(b2.State == Follower)
+			targetCanPos2 = b2.CanonicalPos
+		}
 
 		// Find an unoccupied position.
 		for {
-			occupied := false
-
-			var brickAlreadyThere *Brick
-			if slots.InBounds(targetCanPos) {
-				brickAlreadyThere = slots.Get(targetCanPos)
-			} else {
+			if !slots.InBounds(targetCanPos) || !slots.InBounds(targetCanPos2) {
 				// The brick is going out of bounds, so just let it go
 				// there and trigger game over.
+				break
 			}
-			if brickAlreadyThere != nil && brickAlreadyThere.Val != b.Val {
-				// The position is already occupied by another brick of a
-				// different value.
-				occupied = true
-			}
-			if b.ChainedTo > 0 {
-				b2 := w.GetBrick(b.ChainedTo)
-				if b2.CanonicalPos.X == b.CanonicalPos.X+1 {
-					// to the right
-					chainedTargetCanPos = Pt{targetCanPos.X + 1, targetCanPos.Y}
-				}
-				if b2.CanonicalPos.Y == b.CanonicalPos.Y+1 {
-					// above
-					chainedTargetCanPos = Pt{targetCanPos.X, targetCanPos.Y + 1}
-				}
-				brickAlreadyThere = nil
-				if slots.InBounds(chainedTargetCanPos) {
-					brickAlreadyThere = slots.Get(chainedTargetCanPos)
-				} else {
-					// The brick is going out of bounds, so just let it go
-					// there and trigger game over.
-				}
-				if brickAlreadyThere != nil && b2.Val != brickAlreadyThere.Val {
-					// The position is already occupied by another brick of a
-					// different value.
-					occupied = true
-				}
+
+			// Check if the position is already occupied by another brick of a
+			// different value.
+			otherB := slots.Get(targetCanPos)
+			occupied := otherB != nil && otherB.Val != b.Val
+			if b2 != nil && !occupied {
+				otherB2 := slots.Get(targetCanPos2)
+				occupied = otherB2 != nil && otherB2.Val != b2.Val
 			}
 
 			if occupied {
 				targetCanPos.Y++
+				targetCanPos2.Y++
 			} else {
+				// Found an unoccupied position.
 				break
 			}
 		}
@@ -899,21 +885,16 @@ func (w *World) ConvergeTowardsCanonicalPositions() {
 		if slots.InBounds(targetCanPos) {
 			slots.Set(targetCanPos, b)
 		}
-		targetPos := CanonicalPosToPixelPos(targetCanPos)
+		// If we decided the position of a leader brick, we also decided the
+		// position of the follower brick.
+		if b2 != nil && slots.InBounds(targetCanPos2) {
+			slots.Set(targetCanPos2, b2)
+		}
 
 		// Go towards the target pos, without considering any obstacles.
+		targetPos := CanonicalPosToPixelPos(targetCanPos)
 		w.MoveBrick(b, targetPos, w.CanonicalAdjustmentSpeed,
 			IgnoreObstacles)
-
-		// If we just decided the position of a brick and it is chained to
-		// another brick, we also decided the position of the second brick.
-		if b.ChainedTo > 0 {
-			b2 := w.GetBrick(b.ChainedTo)
-			Assert(b2.State == Follower)
-			if slots.InBounds(chainedTargetCanPos) {
-				slots.Set(chainedTargetCanPos, b2)
-			}
-		}
 	}
 }
 
