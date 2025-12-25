@@ -1357,38 +1357,6 @@ const (
 	SlideOnObstacles
 )
 
-func Helper(b *Brick, targetPos Pt, nMaxPixels int64,
-	obstacles []Rectangle) (nPixelsLeft int64, dif Pt) {
-	var newR Rectangle
-	r := b.Bounds
-	newR, nPixelsLeft = MoveRect(r, targetPos, nMaxPixels, obstacles)
-	dif = newR.Min.Minus(r.Min)
-	return
-}
-
-func (w *World) MoveBrickStopAtObstacles(
-	b *Brick,
-	targetPos Pt,
-	nMaxPixels int64,
-	o GetObstaclesOption,
-) (nPixelsLeft int64) {
-
-	nPixelsLeft, dif := Helper(b, targetPos, nMaxPixels, w.GetObstacles(b, o))
-	if b.ChainedTo > 0 {
-		b2 := w.GetBrick(b.ChainedTo)
-		targetPos2 := b2.PixelPos.Plus(targetPos.Minus(b.PixelPos))
-		nPixelsLeft2, dif2 := Helper(b2, targetPos2, nMaxPixels,
-			w.GetObstacles(b2, o))
-		if nPixelsLeft2 > nPixelsLeft {
-			nPixelsLeft = nPixelsLeft2
-			dif = dif2
-		}
-	}
-
-	b.SetPixelPos(b.PixelPos.Plus(dif), w)
-	return
-}
-
 // MoveBrick should be the only function that changes the position of a brick.
 func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 	moveType MoveType) (hitObstacle bool) {
@@ -1407,7 +1375,7 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 	}
 
 	if moveType == StopAtFirstObstacleExceptTop {
-		nPixelsLeft := w.MoveBrickStopAtObstacles(b, targetPos, nMaxPixels,
+		nPixelsLeft := w.MoveBrickHelper(b, targetPos, nMaxPixels,
 			ExceptTop)
 		return nPixelsLeft > 0
 	}
@@ -1448,19 +1416,53 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 		// object in solid space on which forces are acting.
 
 		// First, go as far as possible towards the target, in a straight line.
-		nPixelsLeft := w.MoveBrickStopAtObstacles(b, targetPos,
-			nMaxPixels, IncludingTop)
+		nPixelsLeft := w.MoveBrickHelper(b, targetPos, nMaxPixels, IncludingTop)
 
 		// Now, go towards the target's X as much as possible.
-		nPixelsLeft = w.MoveBrickStopAtObstacles(b,
-			Pt{targetPos.X, b.Bounds.Min.Y}, nPixelsLeft, IncludingTop)
+		targetPosX := Pt{targetPos.X, b.Bounds.Min.Y}
+		nPixelsLeft = w.MoveBrickHelper(b, targetPosX, nPixelsLeft, IncludingTop)
 
 		// Now, go towards the target's Y as much as possible.
-		nPixelsLeft = w.MoveBrickStopAtObstacles(b,
-			Pt{b.Bounds.Min.X, targetPos.Y}, nPixelsLeft, IncludingTop)
+		targetPosY := Pt{b.Bounds.Min.X, targetPos.Y}
+		nPixelsLeft = w.MoveBrickHelper(b, targetPosY, nPixelsLeft, IncludingTop)
 
 		return nPixelsLeft > 0
 	}
 
 	panic("unhandled movement type")
+}
+
+func (w *World) MoveBrickHelper(
+	b *Brick,
+	targetPos Pt,
+	nMaxPixels int64,
+	o GetObstaclesOption,
+) (nPixelsLeft int64) {
+
+	// Check how much the leader brick can move.
+	newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels,
+		w.GetObstacles(b, o))
+	dif := newR.Min.Minus(b.Bounds.Min)
+
+	if b.ChainedTo > 0 {
+		// Get the follower brick.
+		b2 := w.GetBrick(b.ChainedTo)
+		targetPos2 := b2.PixelPos.Plus(targetPos.Minus(b.PixelPos))
+
+		// Check how much the follower brick can move.
+		newR2, nPixelsLeft2 := MoveRect(b2.Bounds, targetPos2, nMaxPixels,
+			w.GetObstacles(b2, o))
+		dif2 := newR2.Min.Minus(b2.Bounds.Min)
+
+		// If the follower brick can move less than the leader brick, limit the
+		// movement.
+		if nPixelsLeft2 > nPixelsLeft {
+			nPixelsLeft = nPixelsLeft2
+			dif = dif2
+		}
+	}
+
+	// Actually change the brick's position.
+	b.SetPixelPos(b.PixelPos.Plus(dif), w)
+	return
 }
