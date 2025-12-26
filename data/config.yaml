@@ -1,0 +1,7 @@
+SlowdownFactor: 1
+StartState: "Play"
+PlaybackFile: ""
+RecordToFile: false
+RecordToFileOnError: false
+RecordingFile: ""
+DisplayFPS: false

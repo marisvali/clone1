@@ -74,7 +74,7 @@ func SubImage(screen *ebiten.Image, r Rectangle) *ebiten.Image {
 }
 
 func DrawPixel(screen *ebiten.Image, pt Pt, color color.Color) {
-	size := int64(2)
+	size := int64(4)
 	m := screen.Bounds().Min
 	for ax := pt.X - size; ax <= pt.X+size; ax++ {
 		for ay := pt.Y - size; ay <= pt.Y+size; ay++ {

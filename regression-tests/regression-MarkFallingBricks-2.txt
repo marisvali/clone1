@@ -1,0 +1,19 @@
+Setup
+-----
+
+There are several configurations of bricks that involve marking canonical bricks as falling, or not:
+- brick at canonical position, with same value underneath
+- brick at non-canonical position, with same value underneath
+- horizontal chained bricks with a brick underneath the left brick, same value
+- horizontal chained bricks with a brick underneath the left brick, different value
+- horizontal chained bricks with a brick underneath the right brick, same value
+- horizontal chained bricks with a brick underneath the right brick, different value
+- vertical chained bricks with a brick underneath that has the same value as the bottom-most brick
+- vertical chained bricks with a brick underneath that has the same value as the top-most brick
+
+The algorithms do their thing, no user input is required.
+
+Test
+----
+
+The bricks all start falling at the appropriate time.

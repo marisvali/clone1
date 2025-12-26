@@ -2,12 +2,13 @@ package main
 
 import (
 	"embed"
+	"fmt"
+	"github.com/google/uuid"
 	"github.com/hajimehoshi/ebiten/v2"
 	"golang.org/x/image/font"
-	"golang.org/x/image/font/gofont/goregular"
-	"golang.org/x/image/font/opentype"
 	_ "image/png"
 	"os"
+	"time"
 )
 
 // ReleaseVersion is the version of an executable built and given to someone
@@ -58,11 +59,8 @@ const (
 	DebugCrash
 )
 
-type UserData struct {
-	BestScore int64 `yaml:"BestScore"`
-}
-
 type Gui struct {
+	Config
 	UserData
 	Animations
 	layout              Pt
@@ -70,6 +68,7 @@ type Gui struct {
 	FSys                FS
 	imgBlank            *ebiten.Image
 	imgBrick            [31]*ebiten.Image
+	imgBrickFrame       *ebiten.Image
 	imgDigit            [10]*ebiten.Image
 	imgFalling          *ebiten.Image
 	imgCursor           *ebiten.Image
@@ -85,10 +84,12 @@ type Gui struct {
 	imgPausedScreen     *ebiten.Image
 	imgGameOverScreen   *ebiten.Image
 	imgGameWonScreen    *ebiten.Image
+	imgChainH           *ebiten.Image
+	imgChainV           *ebiten.Image
 	folderWatcher1      FolderWatcher
+	folderWatcher2      FolderWatcher
 	defaultFont         font.Face
 	playthrough         Playthrough
-	recordingFile       string
 	frameIdx            int64
 	state               GameState
 	virtualPointerPos   Pt
@@ -102,8 +103,7 @@ type Gui struct {
 	FrameSkipShiftArrow int64
 	FrameSkipArrow      int64
 	enableDebugAreas    bool
-	slowdownFactor      int64       // 1 - does nothing, 2 - game is twice as slow etc
-	accumulatedInput    PlayerInput // only relevant for slowdownFactor > 1, see
+	accumulatedInput    PlayerInput // only relevant for SlowdownFactor > 1, see
 	// the implementation for a more detailed explanation
 	gameArea              Rectangle
 	horizontalDebugArea   Rectangle
@@ -111,6 +111,35 @@ type Gui struct {
 	username              string
 	uploadUserDataChannel chan UserData
 	visWorld              VisWorld
+	devModeEnabled        bool
+	uploadDataChannel     chan uploadData
+	panicHappened         bool
+	panicMsg              string
+}
+
+type uploadData struct {
+	user              string
+	releaseVersion    int64
+	simulationVersion int64
+	inputVersion      int64
+	playthrough       *Playthrough
+}
+
+type Config struct {
+	SlowdownFactor        int64  `yaml:"SlowdownFactor"`
+	StartState            string `yaml:"StartState"`
+	PlaybackFile          string `yaml:"PlaybackFile"`
+	RecordToFile          bool   `yaml:"RecordToFile"`
+	RecordToFileOnError   bool   `yaml:"RecordToFileOnError"`
+	RecordingFile         string `yaml:"RecordingFile"`
+	LoadTest              bool   `yaml:"LoadTest"`
+	TestFile              string `yaml:"TestFile"`
+	AllowOverlappingDrags bool   `yaml:"AllowOverlappingDrags"`
+	DisplayFPS            bool   `yaml:"DisplayFPS"`
+}
+
+type UserData struct {
+	BestScore int64 `yaml:"BestScore"`
 }
 
 type PointerState struct {
@@ -126,42 +155,69 @@ type Animations struct {
 }
 
 func main() {
+	var g Gui
+	defer g.HandlePanic()
 	// ebiten.SetWindowSize(900, 900)
 	ebiten.SetWindowPosition(1000, 100)
 
-	var g Gui
 	g.playthrough.InputVersion = InputVersion
 	g.playthrough.SimulationVersion = SimulationVersion
 	g.playthrough.ReleaseVersion = ReleaseVersion
-	g.recordingFile = "last-recording.clone1"
+
 	g.username = getUsername()
+	// A channel size of 10 means the channel will buffer 10 inputs before it is
+	// full and it blocks. Hopefully, when uploading data, a size of 10 is
+	// sufficient.
+	g.uploadDataChannel = make(chan uploadData, 10)
+	go g.UploadPlaythroughs(g.uploadDataChannel)
 	g.UserData = LoadUserData(g.username)
 	// A channel size of 10 means the channel will buffer 10 inputs before it is
 	// full and it blocks. Hopefully, when uploading data, a size of 10 is
 	// sufficient.
 	g.uploadUserDataChannel = make(chan UserData, 10)
-	go UploadUserData(g.username, g.uploadUserDataChannel)
+	go g.UploadUserData(g.username, g.uploadUserDataChannel)
 	g.FrameSkipAltArrow = 1
 	g.FrameSkipShiftArrow = 10
 	g.FrameSkipArrow = 1
 
-	g.slowdownFactor = 1
-	g.state = PlayScreen
-	// g.state = DebugCrash
-	// g.state = HomeScreen
-	// g.state = Playback
+	if !FileExists(os.DirFS(".").(FS), "data") {
+		g.FSys = &embeddedFiles
+	} else {
+		g.FSys = os.DirFS(".").(FS)
+		g.folderWatcher1.Folder = "data/gui"
+		g.folderWatcher2.Folder = "data"
+		// Initialize watchers.
+		// Check if folder contents changed but do nothing with the result
+		// because we just want the watchers to initialize their internal
+		// structures with the current timestamps of files.
+		g.folderWatcher1.FolderContentsChanged()
+		g.folderWatcher2.FolderContentsChanged()
+	}
 
+	filePassedForPlayback := false
 	if len(os.Args) == 2 {
-		g.recordingFile = os.Args[1]
+		if os.Args[1] == "developer-mode-enabled" {
+			g.devModeEnabled = true
+		} else {
+			filePassedForPlayback = true
+		}
+	}
+
+	g.LoadGuiData()
+
+	if filePassedForPlayback {
+		g.StartState = "Playback"
+		g.PlaybackFile = os.Args[1]
+	}
+
+	if g.StartState == "Playback" || filePassedForPlayback {
 		g.state = Playback
-	}
-
-	if g.state == Playback || g.state == DebugCrash {
-		g.playthrough = DeserializePlaythrough(ReadFile(g.recordingFile))
 		g.enableDebugAreas = true
-	}
-
-	if g.state == DebugCrash {
+		g.playthrough = DeserializePlaythrough(ReadFile(g.PlaybackFile))
+		g.world = NewWorldFromPlaythrough(g.playthrough)
+	} else if g.StartState == "DebugCrash" {
+		g.state = DebugCrash
+		g.enableDebugAreas = true
 		// Don't crash when we are debugging the crash. This is useful if the
 		// crash was caused by one of my asserts:
 		// - world.Step() crashed during the last frame, because my assert
@@ -170,19 +226,20 @@ func main() {
 		// - I can have the world.Step() with the bug execute, and I can see the
 		// results visually
 		CheckCrashes = false
+		g.playthrough = DeserializePlaythrough(ReadFile(g.PlaybackFile))
+		g.world = NewWorldFromPlaythrough(g.playthrough)
+	} else if g.StartState == "Play" {
+		g.state = PlayScreen
+		if g.LoadTest {
+			var test Test
+			LoadYAML(g.FSys, g.TestFile, &test)
+			g.playthrough.Level = test.GetLevel()
+		}
+		g.InitializeWorldToNewGame()
+	} else {
+		panic(fmt.Errorf("invalid g.StartState: %s", g.StartState))
 	}
-	//
-	// g.playthrough.BricksParams = []BrickParams{
-	// 	{Pt{0, 0}, 1},
-	// 	{Pt{0, 1}, 2},
-	// 	{Pt{0, 2}, 3},
-	// 	{Pt{0, 3}, 1},
-	// 	{Pt{0, 4}, 5},
-	// 	{Pt{0, 5}, 6},
-	// 	// {Pt{0, 6}, 7},
-	// 	{Pt{1, 0}, 10},
-	// }
-	g.world = NewWorldFromPlaythrough(g.playthrough)
+	g.playthrough.AllowOverlappingDrags = g.AllowOverlappingDrags
 
 	// The last input caused the crash, so run the whole playthrough except the
 	// last input. This gives me a chance to see the current state of the world
@@ -195,37 +252,140 @@ func main() {
 		}
 	}
 
-	if !FileExists(os.DirFS(".").(FS), "data") {
-		g.FSys = &embeddedFiles
-	} else {
-		g.FSys = os.DirFS(".").(FS)
-		g.folderWatcher1.Folder = "data/gui"
-		// Initialize watchers.
-		// Check if folder contents changed but do nothing with the result
-		// because we just want the watchers to initialize their internal
-		// structures with the current timestamps of files.
-		// This is necessary if we want to avoid creating a new world
-		// immediately after the first world is created, every time.
-		// I want to avoid creating a new world for now because it changes the
-		// id of the current world and it messes up the upload of the world
-		// to the database.
-		g.folderWatcher1.FolderContentsChanged()
+	err := ebiten.RunGame(&g)
+	Check(err)
+}
+
+func (g *Gui) InitializeWorldToNewGame() {
+	g.playthrough.Id = uuid.New()
+	g.playthrough.Seed = time.Now().UnixNano()
+	g.playthrough.History = g.playthrough.History[:0]
+	g.playthrough.AllowOverlappingDrags = g.AllowOverlappingDrags
+	for i := 1; i < 3; i++ {
+		// This might fail, but we really do not care that much. The game should
+		// not be interrupted by this function failing. If it does fail, just
+		// try a couple more times, then give up.
+		err := InitializeIdInDbHttp(g.username,
+			g.playthrough.ReleaseVersion,
+			g.playthrough.SimulationVersion,
+			g.playthrough.InputVersion,
+			g.playthrough.Id)
+		if err == nil {
+			break
+		}
+	}
+	g.world = NewWorldFromPlaythrough(g.playthrough)
+}
+
+func (g *Gui) ResetWorld() {
+	// Create a new world, with a new Id and a new playthrough History, but the
+	// same Seed.
+	g.playthrough.Id = uuid.New()
+	g.playthrough.History = g.playthrough.History[:0]
+	g.playthrough.AllowOverlappingDrags = g.AllowOverlappingDrags
+	for i := 1; i < 3; i++ {
+		// This might fail, but we really do not care that much. The game should
+		// not be interrupted by this function failing. If it does fail, just
+		// try a couple more times, then give up.
+		err := InitializeIdInDbHttp(g.username,
+			g.playthrough.ReleaseVersion,
+			g.playthrough.SimulationVersion,
+			g.playthrough.InputVersion,
+			g.playthrough.Id)
+		if err == nil {
+			break
+		}
+	}
+	g.world = NewWorldFromPlaythrough(g.playthrough)
+}
+func (g *Gui) HandlePanic() {
+	r := recover()
+	if r == nil {
+		// No panic, nothing to do.
+		return
+	}
+	errorMsg := StackTrace(r)
+
+	// Write to files first, as this should be more reliable than http.
+	if g.RecordToFileOnError {
+		WriteFile(g.RecordingFile, g.playthrough.Serialize())
+		timestamp := time.Now().Format("2006-01-02 15:04:05")
+		logMessage := fmt.Sprintf(
+			"----------------------------------------\n%s %s",
+			timestamp, errorMsg)
+		AppendToFile("clone1.log", logMessage)
+		timestamp = time.Now().Format("20060102-150405")
+		filename := fmt.Sprintf("error-%s.clone1", timestamp)
+		idx := 1
+		for {
+			if !FileExists(g.FSys, filename) {
+				break
+			}
+			idx++
+			filename = fmt.Sprintf("error-%s-%02d.clone1", timestamp, idx)
+		}
+		WriteFile(filename, g.playthrough.Serialize())
 	}
 
-	g.LoadGuiData()
+	// Log the error via HTTP (this is the only thing that will have any effect
+	// for errors that happen in the browser, from WASM).
+	// Ignore errors, because if this fails and we are in WASM there is nothing
+	// more we can do anyway to handle the error.
+	_ = LogErrorHttp(
+		g.username,
+		g.playthrough.ReleaseVersion,
+		g.playthrough.SimulationVersion,
+		g.playthrough.InputVersion,
+		g.playthrough.Id,
+		errorMsg,
+		g.playthrough.Serialize())
 
-	// Load the Arial font.
-	var err error
-	fontData, err := opentype.Parse(goregular.TTF)
-	Check(err)
+	// Swallow the panic and display the error to the user. This is preferred
+	// because if an error happens, it will most likely be on someone's phone.
+	// At that point, the best they can do is take a screenshot and send it to
+	// me.
+	g.panicHappened = true
+	g.panicMsg = errorMsg[:min(len(errorMsg), 1300)]
+}
 
-	g.defaultFont, err = opentype.NewFace(fontData, &opentype.FaceOptions{
-		Size:    44,
-		DPI:     72,
-		Hinting: font.HintingVertical,
-	})
-	Check(err)
+func (g *Gui) uploadCurrentWorld() {
+	// Pass a clone to the channel and not a serialized playthrough.
+	// Serialization takes much longer than cloning.
+	// Also, it is important for the channel to have some buffer, otherwise this
+	// call will block until the previous world instance was uploaded.
+	// If the connection to the server drops for a few seconds, either due to
+	// the player's connection or the server not being available, it will
+	// interrupt the gameplay.
+	g.uploadDataChannel <- uploadData{
+		g.username,
+		g.playthrough.ReleaseVersion,
+		g.playthrough.SimulationVersion,
+		g.playthrough.InputVersion,
+		g.playthrough.Clone()}
+}
 
-	err = ebiten.RunGame(&g)
-	Check(err)
+func (g *Gui) UploadPlaythroughs(ch chan uploadData) {
+	defer g.HandlePanic()
+
+	for {
+		// Receive a playthrough from the channel.
+		// Blocks until a playthrough is received.
+		data := <-ch
+
+		// Upload the data.
+		// This might fail, but we really do not care that much. The game should
+		// not be interrupted by this function failing. If it does fail, just
+		// try a couple more times, then give up.
+		for i := 1; i < 3; i++ {
+			err := UploadDataToDbHttp(data.user,
+				data.releaseVersion,
+				data.simulationVersion,
+				data.inputVersion,
+				data.playthrough.Id,
+				data.playthrough.Serialize())
+			if err == nil {
+				break
+			}
+		}
+	}
 }

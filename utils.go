@@ -6,12 +6,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/goccy/go-yaml"
 	"github.com/hajimehoshi/ebiten/v2"
 	"image"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"time"
 )
 
@@ -50,11 +52,6 @@ func LoadImage(fsys FS, str string) *ebiten.Image {
 
 func CloseFile(f fs.File) {
 	Check(f.Close())
-}
-
-func WriteFile(name string, data []byte) {
-	err := os.WriteFile(name, data, 0644)
-	Check(err)
 }
 
 // CopyFile copies a file (not a folder) from source to destination.
@@ -104,29 +101,6 @@ func FileExists(fsys FS, name string) bool {
 	} else {
 		return false
 	}
-}
-
-func AppendToFile(name string, str string) {
-	f, err := os.OpenFile(name, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	Check(err)
-	defer func(file *os.File) { Check(file.Close()) }(f)
-	_, err = f.WriteString(str)
-	Check(err)
-}
-
-func MakeDir(name string) {
-	err := os.MkdirAll(name, 0644)
-	Check(err)
-}
-
-func DeleteDir(name string) {
-	err := os.RemoveAll(name)
-	Check(err)
-}
-
-func ChDir(name string) {
-	err := os.Chdir(name)
-	Check(err)
 }
 
 func GetFiles(fsys FS, dir string, pattern string) []string {
@@ -294,4 +268,21 @@ func GetDigitArray(val int64) []int64 {
 	}
 
 	return digitsBuffer
+}
+
+func LoadYAML(fsys FS, filename string, v any) {
+	data, err := fsys.ReadFile(filename)
+	Check(err)
+	err = yaml.Unmarshal(data, v)
+	Check(err)
+}
+
+func SaveYAML(filename string, v any) {
+	data, err := yaml.Marshal(v)
+	Check(err)
+	WriteFile(filename, data)
+}
+
+func StackTrace(r any) string {
+	return fmt.Sprintf("%v\n\n%s", r, debug.Stack())
 }

@@ -1,0 +1,9 @@
+Setup
+-----
+
+There are simple bricks, horizontally chained bricks  and vertically chained bricks. They are dragged around against each other. This is a free-form test, the point is to stress test as many cases in MoveBricks as possible.
+
+Test
+----
+
+The movements are correct, bricks block each other or allow each other passage appropriately.

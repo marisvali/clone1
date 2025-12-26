@@ -1,23 +1,27 @@
 package main
 
 type Mat struct {
-	cells []int
+	cells []*Brick
 	size  Pt
 }
 
 func NewMat(size Pt) Mat {
 	m := Mat{}
 	m.size = size
-	m.cells = make([]int, size.X*size.Y)
+	m.cells = make([]*Brick, size.X*size.Y)
 	return m
 }
 
-func (m *Mat) Set(pos Pt, val int) {
-	m.cells[pos.Y*m.size.X+pos.X] = val
+func (m *Mat) Set(pos Pt, b *Brick) {
+	m.cells[pos.Y*m.size.X+pos.X] = b
 }
 
-func (m *Mat) Get(pos Pt) int {
+func (m *Mat) Get(pos Pt) *Brick {
 	return m.cells[pos.Y*m.size.X+pos.X]
+}
+
+func (m *Mat) Occupied(pos Pt) bool {
+	return m.cells[pos.Y*m.size.X+pos.X] != nil
 }
 
 func (m *Mat) InBounds(pt Pt) bool {
@@ -27,13 +31,8 @@ func (m *Mat) InBounds(pt Pt) bool {
 		pt.X < m.size.X
 }
 
-func (m *Mat) Submat(pos, size Pt) Mat {
-	sm := NewMat(size)
-	i := Pt{}
-	for i.Y = 0; i.Y < size.Y; i.Y++ {
-		for i.X = 0; i.X < size.X; i.X++ {
-			sm.Set(i, m.Get(pos.Plus(i)))
-		}
+func (m *Mat) Reset() {
+	for i := range m.cells {
+		m.cells[i] = nil
 	}
-	return sm
 }

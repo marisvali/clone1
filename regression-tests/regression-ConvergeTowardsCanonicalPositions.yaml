@@ -1,0 +1,48 @@
+# Bricks are defined like this:
+# Bricks:
+#   - Value: 1              - the value
+#     Pos: [ 2, 3 ]         - the canonical position, in 6x8 coords
+#     Offset: [ 15, 24 ]    - the offset from the canonical position, in pixels
+#     ChainedType: "right"  - "right" or "top"; indicates that there is another
+# brick attached to this one, either to the right of it, or on top of it
+#     ChainedVal: 3         - value of the chained brick
+
+Bricks:
+  - Value: 1
+    Pos: [ 3, 0 ]
+    Offset: [ 0, 0 ]
+    ChainedType: "top"
+    ChainedVal: 2
+  - Value: 3
+    Pos: [ 3, 1 ]
+    Offset: [ 0, 0 ]
+    ChainedType: "top"
+    ChainedVal: 4
+  - Value: 5
+    Pos: [ 3, 1 ]
+    Offset: [ 0, 0 ]
+    ChainedType: "right"
+    ChainedVal: 6
+  - Value: 7
+    Pos: [ 4, 1 ]
+    Offset: [ 0, 0 ]
+    ChainedType: "right"
+    ChainedVal: 8
+  - Value: 9
+    Pos: [ 0, 1 ]
+    Offset: [ 0, 0 ]
+    ChainedType: "right"
+    ChainedVal: 10
+  - Value: 11
+    Pos: [ 1, 1 ]
+    Offset: [ 0, 0 ]
+    ChainedType: "top"
+    ChainedVal: 12
+  - Value: 13
+    Pos: [ 4, 4 ]
+  - Value: 14
+    Pos: [ 1, 3 ]
+  - Value: 15
+    Pos: [ 2, 1 ]
+  - Value: 16
+    Pos: [ 5, 1 ]

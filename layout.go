@@ -45,10 +45,14 @@ var gameWonScreenHomeButton = NewRectangleI(699, 1236, 137, 137)
 var debugPlayButton = NewRectangleI(0, 0, DebugHeight, DebugHeight)
 var debugPlayBar = NewRectangleI(DebugHeight+10, 0, GameWidth-DebugHeight-20, DebugHeight)
 
-// SplashAnimationSize is set here as it is a matter of layout.
+// Item sizes are set here as it is a matter of layout.
 const SplashAnimationSize = 173
+const ChainWidth = int64(43)
+const ChainHeight = int64(135)
 
 func (g *Gui) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
+	defer g.HandlePanic()
+
 	// I receive the application window's actual width and height, via
 	// outsideWidth, outsideHeight. I have to return the size I want, in pixels,
 	// for the bitmap that will be drawn in the window.

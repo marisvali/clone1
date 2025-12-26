@@ -13,8 +13,14 @@ import (
 )
 
 // makeHttpRequest makes a POST HTTP request to an endpoint and returns the
-// body of the response as a string.
-func makeHttpRequest(url string, fields map[string]string, files map[string][]byte) string {
+// body of the response as a string. It returns an error if the call to the
+// server fails. Other errors are considered programmer errors and cause a
+// panic.
+func makeHttpRequest(
+	url string,
+	fields map[string]string,
+	files map[string][]byte,
+) (string, error) {
 	// Create a buffer to write our multipart form data.
 	var requestBody bytes.Buffer
 	writer := multipart.NewWriter(&requestBody)
@@ -39,22 +45,24 @@ func makeHttpRequest(url string, fields map[string]string, files map[string][]by
 	// Perform the request.
 	client := &http.Client{}
 	response, err := client.Do(request)
-	Check(err)
+	if err != nil {
+		return "", err
+	}
 	if response.StatusCode != 200 {
-		Check(fmt.Errorf("http request failed: %d", response.StatusCode))
+		return "", fmt.Errorf("http request failed: %d", response.StatusCode)
 	}
 	data, err := io.ReadAll(response.Body)
 	Check(err)
-	return string(data)
+	return string(data), nil
 }
 
 func InitializeIdInDbHttp(user string,
 	releaseVersion int64,
 	simulationVersion int64,
 	inputVersion int64,
-	id uuid.UUID) {
+	id uuid.UUID) error {
 	url := "https://playful-patterns.com/submit-playthrough-clone1.php"
-	makeHttpRequest(url,
+	_, err := makeHttpRequest(url,
 		map[string]string{
 			"user":               user,
 			"release_version":    strconv.FormatInt(releaseVersion, 10),
@@ -62,15 +70,16 @@ func InitializeIdInDbHttp(user string,
 			"input_version":      strconv.FormatInt(inputVersion, 10),
 			"id":                 id.String()},
 		map[string][]byte{})
+	return err
 }
 
 func UploadDataToDbHttp(user string,
 	releaseVersion int64,
 	simulationVersion int64,
 	inputVersion int64,
-	id uuid.UUID, data []byte) {
+	id uuid.UUID, data []byte) error {
 	url := "https://playful-patterns.com/submit-playthrough-clone1.php"
-	makeHttpRequest(url,
+	_, err := makeHttpRequest(url,
 		map[string]string{
 			"user":               user,
 			"release_version":    strconv.FormatInt(releaseVersion, 10),
@@ -78,18 +87,41 @@ func UploadDataToDbHttp(user string,
 			"input_version":      strconv.FormatInt(inputVersion, 10),
 			"id":                 id.String()},
 		map[string][]byte{"playthrough": data})
+	return err
 }
 
-func SetUserDataHttp(user string, data string) {
+func SetUserDataHttp(user string, data string) error {
 	url := "https://playful-patterns.com/set-user-data-clone1.php"
-	makeHttpRequest(url,
+	_, err := makeHttpRequest(url,
 		map[string]string{"user": user, "data": data},
 		map[string][]byte{})
+	return err
 }
 
-func GetUserDataHttp(user string) string {
+func GetUserDataHttp(user string) (string, error) {
 	url := "https://playful-patterns.com/get-user-data-clone1.php"
 	return makeHttpRequest(url,
 		map[string]string{"user": user},
 		map[string][]byte{})
+}
+
+func LogErrorHttp(user string,
+	releaseVersion int64,
+	simulationVersion int64,
+	inputVersion int64,
+	id uuid.UUID,
+	errorMsg string,
+	data []byte) error {
+	url := "https://playful-patterns.com/log-error-clone1.php"
+	_, err := makeHttpRequest(url,
+		map[string]string{
+			"user":               user,
+			"release_version":    strconv.FormatInt(releaseVersion, 10),
+			"simulation_version": strconv.FormatInt(simulationVersion, 10),
+			"input_version":      strconv.FormatInt(inputVersion, 10),
+			"id":                 id.String(),
+			"error":              errorMsg,
+		},
+		map[string][]byte{"playthrough": data})
+	return err
 }

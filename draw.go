@@ -5,10 +5,23 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text"
 	"image/color"
-	"io/fs"
 )
 
 func (g *Gui) Draw(screen *ebiten.Image) {
+	defer g.HandlePanic()
+
+	if g.panicHappened {
+		g.DrawText(screen, g.panicMsg, false,
+			false,
+			color.NRGBA{
+				R: 0,
+				G: 100,
+				B: 0,
+				A: 255,
+			})
+		return
+	}
+
 	// The screen bitmap has the aspect ratio of the application window. We fill
 	// it with some background. Then, we select the area inside of screen on
 	// which we draw all the actually interesting elements of our gameScreen.
@@ -83,7 +96,7 @@ func (g *Gui) DrawPlayScreen(screen *ebiten.Image) {
 	// Draw empty spaces.
 	for y := int64(0); y < NRows; y++ {
 		for x := int64(0); x < NCols; x++ {
-			pos := g.world.CanonicalPosToPixelPos(Pt{x, y})
+			pos := CanonicalPosToPixelPos(Pt{x, y})
 			DrawSprite(worldScreen, g.imgBlank, float64(pos.X), float64(pos.Y),
 				float64(BrickPixelSize),
 				float64(BrickPixelSize))
@@ -104,6 +117,7 @@ func (g *Gui) DrawPlayScreen(screen *ebiten.Image) {
 	g.DrawBricks(worldScreen, Canonical)
 	g.DrawBricks(worldScreen, Dragged)
 	g.DrawBricks(worldScreen, Falling)
+	g.DrawBricks(worldScreen, Follower)
 
 	// Draw all temporary animations.
 	for _, o := range g.visWorld.Temporary {
@@ -124,14 +138,26 @@ func (g *Gui) DrawPlayScreen(screen *ebiten.Image) {
 		})
 	}
 
-	// g.DrawText(screen, fmt.Sprintf("ActualTPS: %f", ebiten.ActualTPS()), false,
-	// 	false,
-	// 	color.NRGBA{
-	// 		R: 0,
-	// 		G: 100,
-	// 		B: 0,
-	// 		A: 255,
-	// 	})
+	if g.DisplayFPS {
+		g.DrawText(screen, fmt.Sprintf("ActualTPS: %f", ebiten.ActualTPS()), false,
+			false,
+			color.NRGBA{
+				R: 0,
+				G: 100,
+				B: 0,
+				A: 255,
+			})
+		g.DrawText(screen, fmt.Sprintf("ActualTPS: %f ActualFPS: %f",
+			ebiten.ActualTPS(), ebiten.ActualFPS()),
+			false,
+			false,
+			color.NRGBA{
+				R: 0,
+				G: 100,
+				B: 0,
+				A: 255,
+			})
+	}
 
 	if g.state == Playback || g.state == DebugCrash {
 		pos := g.ScreenToGame(g.virtualPointerPos)
@@ -223,6 +249,29 @@ func (g *Gui) DrawBricks(worldScreen *ebiten.Image, s BrickState) {
 		DrawSprite(worldScreen, img, float64(pos.X), float64(pos.Y),
 			float64(BrickPixelSize),
 			float64(BrickPixelSize))
+		if b.Val >= 20 {
+			DrawSprite(worldScreen, g.imgBrickFrame,
+				float64(pos.X), float64(pos.Y),
+				float64(BrickPixelSize),
+				float64(BrickPixelSize))
+		}
+		if b.ChainedTo > 0 && b.State != Follower {
+			c1 := b.Bounds.Center()
+			c2 := g.world.GetBrick(b.ChainedTo).Bounds.Center()
+			c := c1.Plus(c2).DivBy(2)
+			b2 := g.world.GetBrick(b.ChainedTo)
+			if b2.CanonicalPos.X == b.CanonicalPos.X+1 {
+				minX := float64(c.X) - float64(ChainWidth)/2
+				minY := float64(c.Y) - float64(ChainHeight)/2
+				DrawSprite(worldScreen, g.imgChainH,
+					minX, minY, float64(ChainWidth), float64(ChainHeight))
+			} else {
+				minX := float64(c.X) - float64(ChainHeight)/2
+				minY := float64(c.Y) - float64(ChainWidth)/2
+				DrawSprite(worldScreen, g.imgChainV,
+					minX, minY, float64(ChainHeight), float64(ChainWidth))
+			}
+		}
 	}
 }
 
@@ -254,55 +303,6 @@ func (g *Gui) DrawText(screen *ebiten.Image, message string, centerX bool, cente
 	textX := screen.Bounds().Min.X + offsetX
 	textY := screen.Bounds().Max.Y - offsetY - textSize.Max.Y
 	text.Draw(screen, message, g.defaultFont, textX, textY, color)
-}
-
-func (g *Gui) LoadGuiData() {
-	// Read from the disk over and over until a full read is possible.
-	// This repetition is meant to avoid crashes due to reading files
-	// while they are still being written.
-	// It's a hack but possibly a quick and very useful one.
-	// This repeated reading is only useful when we're not reading from the
-	// embedded filesystem. When we're reading from the embedded filesystem we
-	// want to crash as soon as possible. We might be in the browser, in which
-	// case we want to see an error in the developer console instead of a page
-	// that keeps trying to load and reports nothing.
-	previousVal := CheckCrashes
-	if _, ok := g.FSys.(fs.FS); ok {
-		CheckCrashes = false
-	}
-	for {
-		CheckFailed = nil
-		g.imgBlank = LoadImage(g.FSys, "data/gui/blank.png")
-		for i := int64(1); i <= g.world.MaxBrickValue; i++ {
-			filename := fmt.Sprintf("data/gui/%02d.png", i)
-			g.imgBrick[i] = LoadImage(g.FSys, filename)
-		}
-		for i := int64(0); i <= 9; i++ {
-			filename := fmt.Sprintf("data/gui/digit%d.png", i)
-			g.imgDigit[i] = LoadImage(g.FSys, filename)
-		}
-		g.imgCursor = LoadImage(g.FSys, "data/gui/cursor.png")
-		g.imgPlaybackCursor = LoadImage(g.FSys, "data/gui/playback-cursor.png")
-		g.imgPlaybackPause = LoadImage(g.FSys, "data/gui/playback-pause.png")
-		g.imgPlaybackPlay = LoadImage(g.FSys, "data/gui/playback-play.png")
-		g.imgPlayBar = LoadImage(g.FSys, "data/gui/playbar.png")
-		g.imgTimer = LoadImage(g.FSys, "data/gui/timer.png")
-		g.imgHomeScreen = LoadImage(g.FSys, "data/gui/screen-home.png")
-		g.imgScreenPlay = LoadImage(g.FSys, "data/gui/screen-play.png")
-		g.imgPausedScreen = LoadImage(g.FSys, "data/gui/screen-paused.png")
-		g.imgGameOverScreen = LoadImage(g.FSys, "data/gui/screen-game-over.png")
-		g.imgGameWonScreen = LoadImage(g.FSys, "data/gui/screen-game-won.png")
-		g.animSplashRadial = NewAnimation(g.FSys, "data/gui/splash-radial")
-		g.animSplashDown = NewAnimation(g.FSys, "data/gui/splash-down")
-
-		if CheckFailed == nil {
-			break
-		}
-	}
-	CheckCrashes = previousVal
-
-	g.visWorld = NewVisWorld(g.Animations)
-	g.UpdateWindowSize()
 }
 
 func (g *Gui) UpdateWindowSize() {

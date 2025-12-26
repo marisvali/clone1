@@ -1,0 +1,21 @@
+Setup
+-----
+
+There are several configurations of bricks that involve marking canonical bricks as falling, or not:
+- brick at canonical position, with something underneath
+- brick at non-canonical position, with something underneath
+- brick at canonical position, with nothing underneath
+- brick at non-canonical position, with nothing underneath
+- two simple bricks overlapping perfectly at canonical position
+- two horizontal chained bricks overlapping perfectly at canonical position
+- two vertical chained bricks overlapping perfectly at canonical position
+- two simple bricks overlapping perfectly at non-canonical position
+- two horizontal chained bricks overlapping perfectly at non-canonical position
+- two vertical chained bricks overlapping perfectly at non-canonical position
+
+The algorithms do their thing, no user input is required.
+
+Test
+----
+
+The bricks all start falling at the appropriate time.

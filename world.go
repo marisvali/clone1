@@ -219,6 +219,7 @@ const (
 	Canonical BrickState = iota
 	Dragged
 	Falling
+	Follower
 )
 
 type BrickParams struct {
@@ -226,16 +227,26 @@ type BrickParams struct {
 	Val int64
 }
 
+type ChainParams struct {
+	Brick1 int64
+	Brick2 int64
+}
+
 type Level struct {
-	BricksParams []BrickParams
+	BricksParams          []BrickParams
+	ChainsParams          []ChainParams
+	TimerDisabled         bool
+	AllowOverlappingDrags bool
 }
 
 type Brick struct {
+	Id  int64
 	Val int64
 	// This should only be set by SetPixelPos.
 	PixelPos     Pt
 	State        BrickState
 	FallingSpeed int64
+	ChainedTo    int64
 	// Derived values. These should only ever be read. They are re-computed
 	// every time PixelPos changes.
 	CanonicalPos      Pt
@@ -243,22 +254,36 @@ type Brick struct {
 	Bounds            Rectangle
 }
 
-func NewCanonicalBrick(canPos Pt, val int64, w *World) Brick {
-	// Ensure the canonical position is valid.
-	Assert(canPos.X >= 0 && canPos.X < NCols && canPos.Y >= -1 && canPos.Y < NRows)
+func (w *World) NewBrick(pos Pt, val int64) Brick {
+	// Ensure the position is valid.
+	Assert(pos.X >= 0)
+	Assert(pos.X <= PlayAreaWidth-BrickPixelSize)
+	Assert(pos.Y >= 0)
+	Assert(pos.Y <= PlayAreaHeight+BrickMarginPixelSize)
+
 	b := Brick{
+		Id:    w.NextBrickId,
 		Val:   val,
 		State: Canonical,
 	}
-	b.SetPixelPos(w.CanonicalPosToPixelPos(canPos), w)
+	b.SetPixelPos(pos, w)
+	w.NextBrickId++
 	return b
 }
 
 func (b *Brick) SetPixelPos(newPos Pt, w *World) {
+	if b.ChainedTo > 0 {
+		b2 := w.GetBrick(b.ChainedTo)
+		if b2.State == Follower {
+			dif := newPos.Minus(b.PixelPos)
+			b2.SetPixelPos(b2.PixelPos.Plus(dif), w)
+		}
+	}
+
 	b.PixelPos = newPos
-	b.Bounds = w.BrickBounds(b.PixelPos)
-	b.CanonicalPos = w.PixelPosToCanonicalPos(b.PixelPos)
-	b.CanonicalPixelPos = w.CanonicalPosToPixelPos(b.CanonicalPos)
+	b.Bounds = BrickBounds(b.PixelPos)
+	b.CanonicalPos = PixelPosToCanonicalPos(b.PixelPos)
+	b.CanonicalPixelPos = CanonicalPosToPixelPos(b.CanonicalPos)
 	// Ensure the new position is valid.
 	Assert(b.PixelPos.X >= 0 && b.PixelPos.X < PlayAreaWidth)
 	// Ensure the canonical position is valid.
@@ -277,12 +302,14 @@ const (
 type World struct {
 	Rand
 	Seed                     int64
+	NextBrickId              int64
 	DragSpeed                int64
 	CanonicalAdjustmentSpeed int64
 	BrickFallAcceleration    int64
 	Bricks                   []Brick
 	DraggingOffset           Pt
 	DebugPts                 []Pt
+	TimerDisabled            bool
 	TimerCooldown            int64
 	TimerCooldownIdx         int64
 	ComingUpDistanceLeft     int64
@@ -296,27 +323,29 @@ type World struct {
 	MaxInitialBrickValue     int64
 	ObstaclesBuffer          []Rectangle
 	ColumnsBuffer            [][]*Brick
-	CanPosBuffer             []Pt
 	OriginalBricks           []Brick
+	OriginalChains           []ChainParams
 	FirstComingUp            bool
 	Score                    int64
 	JustMergedBricks         []*Brick
+	SlotsBuffer              Mat
+	AllowOverlappingDrags    bool
 }
 
 type PlayerInput struct {
 	Pos             Pt
 	JustPressed     bool
 	JustReleased    bool
-	ResetWorld      bool
 	TriggerComingUp bool
 }
 
 func (p *PlayerInput) EventOccurred() bool {
-	return p.JustPressed || p.JustReleased || p.TriggerComingUp || p.ResetWorld
+	return p.JustPressed || p.JustReleased || p.TriggerComingUp
 }
 
 func NewWorld(seed int64, l Level) (w World) {
 	// Set constants and buffers.
+	w.NextBrickId = 1
 	w.MaxBrickValue = 30
 	w.MaxInitialBrickValue = 5
 	w.DragSpeed = 100
@@ -328,19 +357,43 @@ func NewWorld(seed int64, l Level) (w World) {
 	for i := range w.ColumnsBuffer {
 		w.ColumnsBuffer[i] = make([]*Brick, NRows)
 	}
-	w.CanPosBuffer = make([]Pt, NCols*NRows)
+	w.SlotsBuffer = NewMat(Pt{NCols, NRows})
+	// Pre-allocate. It's fine if it resizes, but it shouldn't be necessary.
+	w.Bricks = make([]Brick, 0, NCols*(NRows+1))
 
 	// Transform Level parameters into the World's initial state.
 	w.Seed = seed
+	w.TimerDisabled = l.TimerDisabled
+	w.AllowOverlappingDrags = l.AllowOverlappingDrags
 	for i := range l.BricksParams {
-		w.OriginalBricks = append(w.OriginalBricks, NewCanonicalBrick(
+		w.OriginalBricks = append(w.OriginalBricks, w.NewBrick(
 			l.BricksParams[i].Pos,
-			l.BricksParams[i].Val,
-			&w))
+			l.BricksParams[i].Val))
 	}
+	w.OriginalChains = slices.Clone(l.ChainsParams)
 
 	w.Initialize()
 	return w
+}
+
+func (w *World) GetBrick(id int64) *Brick {
+	for i := range w.Bricks {
+		if w.Bricks[i].Id == id {
+			return &w.Bricks[i]
+		}
+	}
+	panic(fmt.Errorf("brick not found: %d", id))
+}
+
+func ChainBricks(b1 *Brick, b2 *Brick) {
+	Assert(
+		(b1.CanonicalPos.Y == b2.CanonicalPos.Y &&
+			b1.CanonicalPos.X+1 == b2.CanonicalPos.X) ||
+			(b1.CanonicalPos.Y+1 == b2.CanonicalPos.Y &&
+				b1.CanonicalPos.X == b2.CanonicalPos.X))
+	b1.ChainedTo = b2.Id
+	b2.ChainedTo = b1.Id
+	b2.State = Follower
 }
 
 // NewWorldFromPlaythrough checks if the Playthrough has the same simulation
@@ -366,6 +419,7 @@ func (w *World) ResetTimerCooldown() {
 
 func (w *World) Initialize() {
 	w.RSeed(w.Seed)
+	w.Bricks = w.Bricks[:0]
 	if len(w.OriginalBricks) == 0 {
 		w.CreateFirstRowsOfBricks()
 		w.ResetTimerCooldown()
@@ -374,7 +428,12 @@ func (w *World) Initialize() {
 		w.FirstComingUp = true
 		w.State = ComingUp
 	} else {
-		w.Bricks = slices.Clone(w.OriginalBricks)
+		for _, b := range w.OriginalBricks {
+			w.Bricks = append(w.Bricks, b)
+		}
+		for _, c := range w.OriginalChains {
+			ChainBricks(&w.Bricks[c.Brick1], &w.Bricks[c.Brick2])
+		}
 		w.ResetTimerCooldown()
 		w.SolvedFirstState = false
 		w.FirstComingUp = false
@@ -384,11 +443,6 @@ func (w *World) Initialize() {
 
 func (w *World) Step(input PlayerInput) {
 	w.JustMergedBricks = w.JustMergedBricks[:0]
-
-	// Reset the world.
-	if input.ResetWorld {
-		w.Initialize()
-	}
 
 	// Trigger a coming up event.
 	if input.TriggerComingUp {
@@ -435,7 +489,7 @@ func (w *World) DetermineDraggedBrick(input PlayerInput) {
 		var closest *Brick
 		var minDist int64 = math.MaxInt64
 		for i := range w.Bricks {
-			r := w.BrickBounds(w.Bricks[i].PixelPos)
+			r := w.Bricks[i].Bounds
 			center := r.Min.Plus(r.Max).DivBy(2)
 			dist := center.SquaredDistTo(input.Pos)
 			if dist < minDist {
@@ -462,9 +516,14 @@ func (w *World) DetermineDraggedBrick(input PlayerInput) {
 				// canonical adjustment system handle it.
 				dragged.State = Canonical
 			}
-			dragged = closest
+
+			if closest.State == Follower {
+				dragged = w.GetBrick(closest.ChainedTo)
+			} else {
+				dragged = closest
+			}
 			dragged.State = Dragged
-			w.DraggingOffset = dragged.PixelPos.Minus(input.Pos)
+			w.DraggingOffset = dragged.Bounds.Min.Minus(input.Pos)
 		}
 	}
 
@@ -477,16 +536,18 @@ func (w *World) DetermineDraggedBrick(input PlayerInput) {
 }
 
 func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
-	w.TimerCooldownIdx--
-	if w.TimerCooldownIdx <= 0 {
-		w.State = ComingUp
-		return
-	}
+	if !w.TimerDisabled {
+		w.TimerCooldownIdx--
+		if w.TimerCooldownIdx <= 0 {
+			w.State = ComingUp
+			return
+		}
 
-	if w.NoMoreMergesArePossible() {
-		w.TimerCooldownIdx = 0
-		w.State = ComingUp
-		return
+		if w.NoMoreMergesArePossible() {
+			w.TimerCooldownIdx = 0
+			w.State = ComingUp
+			return
+		}
 	}
 
 	w.UpdateDraggedBrick(input)
@@ -494,20 +555,33 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 	w.UpdateCanonicalBricks()
 	w.MergeBricks()
 
+	// Check if bricks went over the top.
+	// This can be possible due to adjustments made in UpdateCanonicalBricks.
+	for i := range w.Bricks {
+		top := int64(0)
+		brickTop := w.Bricks[i].Bounds.Min.Y
+
+		if brickTop < top {
+			// The brick is over the top.
+			w.State = Lost
+			return
+		}
+	}
+
 	// Disable the check below as we currently do allow intersections to occur
 	// in some cases and the strategy is to recover from them. So "solids
 	// should never intersect" is no longer a valid invariant to check against.
 	//
 	// Check if bricks intersect each other or are out of bounds.
 	// {
-	// 	for i := range w.BricksParams {
-	// 		obstacles := w.GetObstacles(&w.BricksParams[i], IncludingTop)
-	// 		brick := w.BrickBounds(w.BricksParams[i].PixelPos)
+	// 	for i := range w.Bricks {
+	// 		obstacles := w.GetObstacles(&w.Bricks[i], IncludingTop)
+	// 		brick := BrickBounds(w.Bricks[i].PixelPos)
 	// 		// Don't use RectIntersectsRects because I want to be able to
 	// 		// put a breakpoint here and see which rect intersects which.
 	// 		for j := range obstacles {
 	// 			if brick.Intersects(obstacles[j]) {
-	// 				// Check(fmt.Errorf("solids intersect each other"))
+	// 				Check(fmt.Errorf("solids intersect each other"))
 	// 				w.AssertionFailed = true
 	// 			}
 	// 		}
@@ -516,13 +590,29 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 }
 
 func (w *World) NoMoreMergesArePossible() bool {
-	valExists := map[int64]bool{}
+	// Group bricks by their value.
+	groups := map[int64][]*Brick{}
 	for i := range w.Bricks {
-		if valExists[w.Bricks[i].Val] {
-			return false
-		}
-		valExists[w.Bricks[i].Val] = true
+		b := &w.Bricks[i]
+		groups[b.Val] = append(groups[b.Val], b)
 	}
+
+	// Go through each group and check if it contains bricks that could be
+	// merged.
+	for _, g := range groups {
+		for i := range g {
+			for j := i + 1; j < len(g); j++ {
+				b1 := g[i]
+				b2 := g[j]
+				// We can merge b1 to b2 if they are not chained to each other.
+				if b1.ChainedTo != b2.Id {
+					// A merge is possible.
+					return false
+				}
+			}
+		}
+	}
+
 	return true
 }
 
@@ -538,18 +628,51 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 		return
 	}
 
-	// Get the set of rectangles the brick must not intersect.
-	obstacles := w.GetObstacles(dragged, IncludingTop)
+	if w.AllowOverlappingDrags {
+		targetPos := input.Pos.Plus(w.DraggingOffset)
+		// Clip targetPos to within the bounds of the game area.
+		if targetPos.X < 0 {
+			targetPos.X = 0
+		}
+		if targetPos.Y < 0 {
+			targetPos.Y = 0
+		}
+		if targetPos.X > PlayAreaWidth-BrickPixelSize {
+			targetPos.X = PlayAreaWidth - BrickPixelSize
+		}
+		if targetPos.Y > PlayAreaHeight+BrickMarginPixelSize {
+			targetPos.Y = PlayAreaHeight + BrickMarginPixelSize
+		}
+		w.MoveBrick(dragged, targetPos, w.DragSpeed, IgnoreObstacles)
+	} else {
+		// Get the set of rectangles the brick must not intersect.
+		w.GetObstacles(dragged, IncludingTop, &w.ObstaclesBuffer)
 
-	// If the dragged brick intersects something, it becomes canonical and the
-	// behavior of canonical bricks will resolve the intersection.
-	if RectIntersectsRects(dragged.Bounds, obstacles) {
-		dragged.State = Canonical
-		return
+		// If the dragged brick intersects something, it becomes canonical and
+		// the behavior of canonical bricks will resolve the intersection.
+		if RectIntersectsRects(dragged.Bounds, w.ObstaclesBuffer) {
+			dragged.State = Canonical
+			return
+		}
+
+		// Also check if the follower intersects something.
+		if dragged.ChainedTo != 0 {
+			b2 := w.GetBrick(dragged.ChainedTo)
+			w.GetObstacles(b2, IncludingTop, &w.ObstaclesBuffer)
+			if RectIntersectsRects(b2.Bounds, w.ObstaclesBuffer) {
+				dragged.State = Canonical
+				return
+			}
+		}
+
+		targetPos := input.Pos.Plus(w.DraggingOffset)
+		w.MoveBrick(dragged, targetPos, w.DragSpeed, SlideOnObstacles)
 	}
+}
 
-	targetPos := input.Pos.Plus(w.DraggingOffset)
-	w.MoveBrick(dragged, targetPos, w.DragSpeed, SlideOnObstacles)
+func BrickBounds(posPixels Pt) Rectangle {
+	return NewRectangle(posPixels,
+		posPixels.Plus(Pt{BrickPixelSize, BrickPixelSize}))
 }
 
 func (w *World) UpdateFallingBricks() {
@@ -573,6 +696,11 @@ func (w *World) UpdateFallingBricks() {
 	}
 }
 
+func (w *World) UpdateCanonicalBricks() {
+	w.MarkFallingBricks()
+	w.ConvergeTowardsCanonicalPositions()
+}
+
 // MarkFallingBricks checks if any canonical brick should start falling and
 // changes its state.
 func (w *World) MarkFallingBricks() {
@@ -589,121 +717,169 @@ func (w *World) MarkFallingBricks() {
 			continue
 		}
 
-		// Check if there's anything under this brick.
-		canPosUnder := b.CanonicalPos
-		canPosUnder.Y--
-		if canPosUnder.Y < 0 {
+		if b.CanonicalPos.Y == 0 {
 			// The brick is already at the bottom, it cannot fall any lower.
 			continue
 		}
 
-		// Get the slot underneath the brick.
-		slot := w.BrickBounds(w.CanonicalPosToPixelPos(canPosUnder))
+		// Check if the brick or the slot underneath intersects other bricks.
+		w.GetObstacles(b, IncludingTop, &w.ObstaclesBuffer)
+		r := b.Bounds
+		r.Max.Y += BrickPixelSize + BrickMarginPixelSize
+		if RectIntersectsRects(r, w.ObstaclesBuffer) {
+			continue
+		}
 
-		// Check if any bricks intersect the slot.
-		intersects := false
-		for j := range w.Bricks {
-			if i != j && b.Val != w.Bricks[j].Val &&
-				w.Bricks[j].Bounds.Intersects(slot) {
-				intersects = true
-				break
+		if b.ChainedTo != 0 {
+			// Check the chained brick as well.
+			// Checking underneath the chained brick is only relevant for a
+			// horizontally chained brick but it doesn't hurt logically or
+			// computationally to do the same operation for vertically chained
+			// bricks as well.
+			b2 := w.GetBrick(b.ChainedTo)
+			w.GetObstacles(b2, IncludingTop, &w.ObstaclesBuffer)
+			r2 := b2.Bounds
+			r2.Max.Y += BrickPixelSize + BrickMarginPixelSize
+			if RectIntersectsRects(r2, w.ObstaclesBuffer) {
+				continue
 			}
 		}
-		if !intersects {
-			b.State = Falling
-			b.FallingSpeed = 0
-		}
+
+		// Nothing is sustaining the brick, so it should start falling.
+		b.State = Falling
+		b.FallingSpeed = 0
 	}
 }
 
-func (w *World) UpdateCanonicalBricks() {
-	w.MarkFallingBricks()
+func (w *World) ConvergeTowardsCanonicalPositions() {
+	// Motivation
+	// ----------
+	//
+	// This game requires bricks to stay in their place until they are moved
+	// around by the player or they fall because there's nothing underneath
+	// them.
+	//
+	// However, bricks are moved around by the player and often released in
+	// non-standard positions. When they fall they might travel a little below
+	// the standard position before they hit a brick and need to stop.
+	//
+	// There is also the issue of edge cases where bricks that should not
+	// intersect can be made to intersect by arranging just the right
+	// combination of bricks and having merges occur.
+	//
+	// General solution
+	// ----------------
+	//
+	// The above problems can all be solved by having an algorithm with the
+	// following characteristics:
+	// - Decide a valid position for each brick.
+	// - Minimize travel distances in some way that looks good in the average
+	// case.
+	// - Have bricks travel each frame towards their positions without
+	// considering any obstacles.
+	//
+	// Design
+	// ------
+	//
+	// The algorithm goes through each brick and assigns it a canonical position
+	// that is yet unoccupied. Once the position is occupied, future bricks must
+	// be assigned different positions.
+	//
+	// If two bricks are close to the same canonical positions, we will get a
+	// conflict. One must have priority over the other. The other one must be
+	// assigned to a different canonical position.
+	//
+	// The floor and the left and right walls impose hard constraints, bricks
+	// cannot move beyond them. So, when there is a conflict, search upwards for
+	// the next valid position. Sort the bricks by their Y coordinate, assign
+	// positions starting with the lowest Y, going up. This way we hope to
+	// achieve minimal movements in the average case.
+	//
+	// Correctness
+	// -----------
+	//
+	// Since the algorithm always assigns each brick to its own canonical and
+	// unoccupied position, it should always push bricks towards a valid state
+	// where they don't overlap. Since we go from bottom to top, bricks are not
+	// usually assigned positions that have nothing underneath them. If this
+	// ever happens momentarily, the brick falls and will then converge to a
+	// canonical position that has something underneath it.
+	//
+	// The biggest concern with the algorithm is for the adjustments to look
+	// natural in the average case, and somewhat natural in edge cases. This has
+	// been tested manually and I can confirm is looks natural enough.
 
-	// Decide the target position for each canonical brick:
-	// - Assign each brick to a column. Usually canonical bricks are firmly in
-	// a column or another. But a dragged brick becomes canonical when released
-	// and it can be released in any position. So we may always have at least
-	// one canonical brick in some non-standard position, e.g. between two
-	// columns. But, even if a brick is between two columns, it is closer to one
-	// than another.
-	// - For the bricks in a column, decide which goes into what position. The
-	// easiest way to do this is to get the bottom one first, decide that one
-	// cannot move any lower, so it gets the bottom position. The next one must
-	// necessarily get the next available position, on top of the first one,
-	// and so on.
-	// - This may result in some bricks moving up in order to fit well with the
-	// others. But normally they will travel a short distance and it should look
-	// natural to the player.
-	// - An exception has to be made for bricks that have the same value. If two
-	// bricks with the same value compete for the same spot, they are allowed to
-	// go for it. This is because they are competing because they are probably
-	// already overlapping significantly, which means a merge is imminent. It
-	// looks a little ridiculous if they go on top of each other, then one falls
-	// on the other and they merge.
-	//
-	// By following this algorithm, we guarantee that bricks end up in valid
-	// positions and any intersections get solved relatively quickly in a way
-	// that feels natural.
-	//
-	// Assign each brick to a column.
-	columns := w.ColumnsBuffer
-	for i := range columns {
-		columns[i] = w.ColumnsBuffer[i][:0]
-	}
+	// Sort bricks.
+	slices.SortStableFunc(w.Bricks, func(b1, b2 Brick) int {
+		if b2.PixelPos.Y != b1.PixelPos.Y {
+			// Bigger Y has priority (must appear first in the list).
+			return cmp.Compare(b2.PixelPos.Y, b1.PixelPos.Y)
+		} else {
+			// When Y is the same, smaller X has priority (must appear first in
+			// the list).
+			return cmp.Compare(b1.PixelPos.X, b2.PixelPos.X)
+		}
+	})
+
+	slots := w.SlotsBuffer
+	slots.Reset()
 
 	for i := range w.Bricks {
 		b := &w.Bricks[i]
-
-		// Skip non-canonical bricks.
 		if b.State != Canonical {
 			continue
 		}
 
-		// Possible assert: the column is valid.
-		columns[b.CanonicalPos.X] = append(columns[b.CanonicalPos.X], b)
-	}
-
-	// Go column by column.
-	for _, column := range columns {
-		// Sort bricks in the column by their Y position, so that we can iterate
-		// through bricks from bottom to top.
-		slices.SortFunc(column, func(b1, b2 *Brick) int {
-			return cmp.Compare(b2.PixelPos.Y, b1.PixelPos.Y)
-		})
-
-		lastTargetCanPos := Pt{-1000, -1000}
-		for i := range column {
-			b := column[i]
-			// Get target pos.
-			targetCanPos := b.CanonicalPos
-			// If it intersects with an already decided target pos, go to the
-			// next available canonical target pos. However, we are going from
-			// bottom to top so the only thing it can intersect with is the
-			// previous target pos, and the higher target pos is definitely
-			// available.
-			if targetCanPos == lastTargetCanPos {
-				// Only put the brick at a higher pos if it has a different
-				// value than the brick at the current pos. Otherwise, we are
-				// dealing with two bricks of the same value which are
-				// overlapping but not yet merged.
-				// In this case, just let the targetCanPos be the same as the
-				// lastTargetCanPos. This will move the current brick towards
-				// the existing brick and they will soon merge.
-				// If for any reason any of the two bricks changes value in a
-				// future frame (though I can't currently imagine a case where
-				// this happens), then the algorithm will run again and drive
-				// these bricks apart.
-				if i > 0 && column[i].Val != column[i-1].Val {
-					targetCanPos.Y += 1
-				}
-			}
-			lastTargetCanPos = targetCanPos
-			targetPos := w.CanonicalPosToPixelPos(targetCanPos)
-
-			// Go towards the target pos, without considering any obstacles.
-			w.MoveBrick(b, targetPos, w.CanonicalAdjustmentSpeed,
-				IgnoreObstacles)
+		// We need to find a position for b, in this column.
+		// We start off from b's current position.
+		targetCanPos := b.CanonicalPos
+		var b2 *Brick
+		var targetCanPos2 Pt
+		if b.ChainedTo > 0 {
+			b2 = w.GetBrick(b.ChainedTo)
+			Assert(b2.State == Follower)
+			targetCanPos2 = b2.CanonicalPos
 		}
+
+		// Find an unoccupied position.
+		for {
+			if !slots.InBounds(targetCanPos) || !slots.InBounds(targetCanPos2) {
+				// The brick is going out of bounds, so just let it go
+				// there and trigger game over.
+				break
+			}
+
+			// Check if the position is already occupied by another brick of a
+			// different value.
+			otherB := slots.Get(targetCanPos)
+			occupied := otherB != nil && otherB.Val != b.Val
+			if b2 != nil && !occupied {
+				otherB2 := slots.Get(targetCanPos2)
+				occupied = otherB2 != nil && otherB2.Val != b2.Val
+			}
+
+			if occupied {
+				targetCanPos.Y++
+				targetCanPos2.Y++
+			} else {
+				// Found an unoccupied position.
+				break
+			}
+		}
+
+		if slots.InBounds(targetCanPos) {
+			slots.Set(targetCanPos, b)
+		}
+		// If we decided the position of a leader brick, we also decided the
+		// position of the follower brick.
+		if b2 != nil && slots.InBounds(targetCanPos2) {
+			slots.Set(targetCanPos2, b2)
+		}
+
+		// Go towards the target pos, without considering any obstacles.
+		targetPos := CanonicalPosToPixelPos(targetCanPos)
+		w.MoveBrick(b, targetPos, w.CanonicalAdjustmentSpeed,
+			IgnoreObstacles)
 	}
 }
 
@@ -743,10 +919,10 @@ func (w *World) MergeBricks() {
 		// position.
 		b1 := &w.Bricks[i]
 		b2 := &w.Bricks[j]
-		canPos1 := w.PixelPosToCanonicalPixelPos(b1.PixelPos)
+		canPos1 := PixelPosToCanonicalPixelPos(b1.PixelPos)
 		dif1 := b1.PixelPos.SquaredDistTo(canPos1)
 
-		canPos2 := w.PixelPosToCanonicalPixelPos(b2.PixelPos)
+		canPos2 := PixelPosToCanonicalPixelPos(b2.PixelPos)
 		dif2 := b2.PixelPos.SquaredDistTo(canPos2)
 
 		var idxToRemove int
@@ -762,14 +938,38 @@ func (w *World) MergeBricks() {
 		}
 		w.JustMergedBricks = append(w.JustMergedBricks, brickToUpdate)
 
+		// A merge breaks the chains off the bricks involved in the merge.
+		w.UnchainBrick(b1)
+		w.UnchainBrick(b2)
+
 		// Update the score.
 		w.Score += brickToUpdate.Val
+
+		// Perform the merge.
 		brickToUpdate.Val++
 		brickToUpdate.State = Canonical
 		w.Bricks = Remove(w.Bricks, idxToRemove)
 		if brickToUpdate.Val == w.MaxBrickValue {
 			w.State = Won
 		}
+	}
+}
+
+func (w *World) UnchainBrick(b *Brick) {
+	if b.ChainedTo == 0 {
+		return
+	}
+
+	b2 := w.GetBrick(b.ChainedTo)
+	b.ChainedTo = 0
+	b2.ChainedTo = 0
+
+	if b.State == Follower {
+		b.State = b2.State
+	} else if b2.State == Follower {
+		b2.State = b.State
+	} else {
+		panic("no follower")
 	}
 }
 
@@ -798,7 +998,8 @@ func (w *World) CreateFirstRowsOfBricks() {
 	// Create the first row.
 	for x := range NCols {
 		val := w.RInt(1, w.MaxInitialBrickValue-1)
-		w.Bricks = append(w.Bricks, NewCanonicalBrick(Pt{x, 0}, val, w))
+		pos := CanonicalPosToPixelPos(Pt{x, 0})
+		w.Bricks = append(w.Bricks, w.NewBrick(pos, val))
 	}
 
 	// Create a row below that will not cause any merges.
@@ -820,15 +1021,22 @@ func (w *World) CurrentMaxVal() int64 {
 }
 
 func (w *World) CreateNewRowOfBricks(maxVal int64) {
+	type BrickPair struct {
+		b1 *Brick
+		b2 *Brick
+	}
+	var possibleChains []BrickPair
 	for x := range NCols {
 		// Get a value that is different from the value of the brick right
 		// above (if there is a brick right above).
-		newPos := Pt{x, -1}
+		newPos := CanonicalPosToPixelPos(Pt{x, -1})
 		posAbove := Pt{x, 0}
 		forbiddenValue := int64(0)
-		for _, b := range w.Bricks {
+		var brickAbove *Brick
+		for i, b := range w.Bricks {
 			if b.CanonicalPos == posAbove {
 				forbiddenValue = b.Val
+				brickAbove = &w.Bricks[i]
 			}
 		}
 
@@ -840,7 +1048,77 @@ func (w *World) CreateNewRowOfBricks(maxVal int64) {
 			}
 		}
 
-		w.Bricks = append(w.Bricks, NewCanonicalBrick(newPos, val, w))
+		w.Bricks = append(w.Bricks, w.NewBrick(newPos, val))
+
+		if brickAbove != nil &&
+			brickAbove.State == Canonical &&
+			brickAbove.ChainedTo == 0 {
+			// Vertical chain possible.
+			possibleChains = append(possibleChains,
+				BrickPair{
+					&w.Bricks[len(w.Bricks)-1],
+					brickAbove})
+		}
+		if x > 0 {
+			// Horizontal chain possible.
+			possibleChains = append(possibleChains,
+				BrickPair{
+					&w.Bricks[len(w.Bricks)-2],
+					&w.Bricks[len(w.Bricks)-1]})
+		}
+	}
+
+	// Add chains, if we are at 10 or more.
+	currentMaxVal := w.CurrentMaxVal()
+	if currentMaxVal < 10 {
+		return
+	}
+
+	// Compute how many chains there will be in this new row.
+	// On average, the number of chains per row = (currentMaxVal - 1) / 10.
+	// Since this will usually be a decimal number, we add the integral part
+	// and then we increase by 1 randomly, where the chance of increasing by 1
+	// depends on the decimal part.
+	nChainsToAdd := (currentMaxVal - 1) / 10
+	if w.RInt(0, 10) < (currentMaxVal-1)%10 {
+		nChainsToAdd++
+	}
+
+	// Add chains randomly to valid chain positions until we run out of chains
+	// to add or we run out of valid chain positions.
+	for {
+		if nChainsToAdd == 0 {
+			break
+		}
+		if len(possibleChains) == 0 {
+			// This can happen in rare cases. The maximum value before the game
+			// is won is 29, so the maximum value for nChainsToAdd is 3.
+			// If the new row is [1, 2, 3, 4, 5, 6] you can place one chain
+			// between bricks 2 and 3, then another between 4 and 5, and no more
+			// horizontal chains are possible. If you can't add vertical chains
+			// betewen 1 or 6 and the bricks above them, you just ran out of
+			// places to add chains to.
+			break
+		}
+		chosenOne := w.RInt(int64(0), int64(len(possibleChains)-1))
+		c := possibleChains[chosenOne]
+		ChainBricks(c.b1, c.b2)
+		possibleChains = Remove(possibleChains, int(chosenOne))
+		nChainsToAdd--
+
+		// A brick might appear multiple times in possibleChains, because it
+		// may be chained to the brick above or the brick next to it. So remove
+		// entries in possibleChains which include the recently chained bricks.
+		n := 0
+		for i, p := range possibleChains {
+			containsNewlyChainedBricks :=
+				p.b1 == c.b1 || p.b1 == c.b2 || p.b2 == c.b1 || p.b2 == c.b2
+			if !containsNewlyChainedBricks {
+				possibleChains[n] = possibleChains[i]
+				n++
+			}
+		}
+		possibleChains = possibleChains[:n]
 	}
 }
 
@@ -885,6 +1163,10 @@ func (w *World) StepComingUp(justEnteredState bool) {
 	for i := range w.Bricks {
 		newPos := w.Bricks[i].PixelPos
 		newPos.Y -= w.ComingUpSpeed
+		if w.Bricks[i].State == Follower {
+			// Skip follower bricks otherwise they get moved twice.
+			continue
+		}
 		w.Bricks[i].SetPixelPos(newPos, w)
 	}
 	w.ComingUpDistanceLeft -= w.ComingUpSpeed
@@ -923,7 +1205,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 	}
 }
 
-func (w *World) PixelPosToCanonicalPos(pixelPos Pt) (canPos Pt) {
+func PixelPosToCanonicalPos(pixelPos Pt) (canPos Pt) {
 	l := float64(BrickPixelSize + BrickMarginPixelSize)
 	canPos.X = int64(math.Round(float64(pixelPos.X) / l))
 	canPos.Y = int64(math.Round(
@@ -931,22 +1213,17 @@ func (w *World) PixelPosToCanonicalPos(pixelPos Pt) (canPos Pt) {
 	return
 }
 
-func (w *World) CanonicalPosToPixelPos(canPos Pt) (pixelPos Pt) {
+func CanonicalPosToPixelPos(canPos Pt) (pixelPos Pt) {
 	l := BrickPixelSize + BrickMarginPixelSize
 	pixelPos.X = canPos.X * l
 	pixelPos.Y = PlayAreaHeight - (canPos.Y+1)*l + BrickMarginPixelSize
 	return
 }
 
-func (w *World) PixelPosToCanonicalPixelPos(pixelPos Pt) (canPixelPos Pt) {
-	canPos := w.PixelPosToCanonicalPos(pixelPos)
-	canPixelPos = w.CanonicalPosToPixelPos(canPos)
+func PixelPosToCanonicalPixelPos(pixelPos Pt) (canPixelPos Pt) {
+	canPos := PixelPosToCanonicalPos(pixelPos)
+	canPixelPos = CanonicalPosToPixelPos(canPos)
 	return
-}
-
-func (w *World) BrickBounds(posPixels Pt) Rectangle {
-	return NewRectangle(posPixels,
-		posPixels.Plus(Pt{BrickPixelSize, BrickPixelSize}))
 }
 
 type GetObstaclesOption int64
@@ -958,12 +1235,15 @@ const (
 
 // GetObstacles returns all the obstacles for a certain brick, as rectangles.
 // This includes walls and other bricks that have different values than b.
-func (w *World) GetObstacles(b *Brick,
-	o GetObstaclesOption) (obstacles []Rectangle) {
-	obstacles = w.ObstaclesBuffer[:0]
+func (w *World) GetObstacles(
+	b *Brick,
+	o GetObstaclesOption,
+	buffer *[]Rectangle) {
+
+	obstacles := (*buffer)[:0]
 	for j := range w.Bricks {
 		otherB := &w.Bricks[j]
-		if b == otherB {
+		if otherB == b || otherB.Id == b.ChainedTo {
 			continue
 		}
 		// Skip bricks that have the same value.
@@ -990,7 +1270,7 @@ func (w *World) GetObstacles(b *Brick,
 	}
 	obstacles = append(obstacles, leftRect)
 	obstacles = append(obstacles, rightRect)
-	return
+	*buffer = obstacles
 }
 
 type MoveType int64
@@ -1004,6 +1284,9 @@ const (
 // MoveBrick should be the only function that changes the position of a brick.
 func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 	moveType MoveType) (hitObstacle bool) {
+	// I assume that only non-follower bricks will ever be moved.
+	Assert(b.State != Follower)
+
 	if b.PixelPos == targetPos {
 		return false
 	}
@@ -1016,10 +1299,8 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 	}
 
 	if moveType == StopAtFirstObstacleExceptTop {
-		obstacles := w.GetObstacles(b, ExceptTop)
-		newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels,
-			obstacles)
-		b.SetPixelPos(newR.Min, w)
+		nPixelsLeft := w.MoveBrickHelper(b, targetPos, nMaxPixels,
+			ExceptTop)
 		return nPixelsLeft > 0
 	}
 
@@ -1057,23 +1338,59 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 		// or "teleports" and the effect of the brick travelling is more
 		// pleasant. It gives more of a feeling that it is an actual solid
 		// object in solid space on which forces are acting.
-		r := b.Bounds
-		obstacles := w.GetObstacles(b, IncludingTop)
 
 		// First, go as far as possible towards the target, in a straight line.
-		r, nMaxPixels = MoveRect(b.Bounds, targetPos, nMaxPixels, obstacles)
+		nPixelsLeft := w.MoveBrickHelper(b, targetPos, nMaxPixels, IncludingTop)
 
 		// Now, go towards the target's X as much as possible.
-		r, nMaxPixels = MoveRect(r, Pt{targetPos.X, r.Min.Y}, nMaxPixels,
-			obstacles)
+		targetPosX := Pt{targetPos.X, b.Bounds.Min.Y}
+		nPixelsLeft = w.MoveBrickHelper(b, targetPosX, nPixelsLeft, IncludingTop)
 
 		// Now, go towards the target's Y as much as possible.
-		r, nMaxPixels = MoveRect(r, Pt{r.Min.X, targetPos.Y}, nMaxPixels,
-			obstacles)
+		targetPosY := Pt{b.Bounds.Min.X, targetPos.Y}
+		nPixelsLeft = w.MoveBrickHelper(b, targetPosY, nPixelsLeft, IncludingTop)
 
-		b.SetPixelPos(r.Min, w)
-		return true
+		return nPixelsLeft > 0
 	}
 
 	panic("unhandled movement type")
+}
+
+// MoveBrickHelper moves a brick while considering obstacles, and takes into
+// account the follower brick if we are dealing with chained bricks.
+func (w *World) MoveBrickHelper(
+	b *Brick,
+	targetPos Pt,
+	nMaxPixels int64,
+	o GetObstaclesOption,
+) (nPixelsLeft int64) {
+
+	// Check how much the leader brick can move.
+	w.GetObstacles(b, o, &w.ObstaclesBuffer)
+	newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels,
+		w.ObstaclesBuffer)
+	dif := newR.Min.Minus(b.Bounds.Min)
+
+	if b.ChainedTo > 0 {
+		// Get the follower brick.
+		b2 := w.GetBrick(b.ChainedTo)
+		targetPos2 := b2.PixelPos.Plus(targetPos.Minus(b.PixelPos))
+
+		// Check how much the follower brick can move.
+		w.GetObstacles(b2, o, &w.ObstaclesBuffer)
+		newR2, nPixelsLeft2 := MoveRect(b2.Bounds, targetPos2, nMaxPixels,
+			w.ObstaclesBuffer)
+		dif2 := newR2.Min.Minus(b2.Bounds.Min)
+
+		// If the follower brick can move less than the leader brick, limit the
+		// movement.
+		if nPixelsLeft2 > nPixelsLeft {
+			nPixelsLeft = nPixelsLeft2
+			dif = dif2
+		}
+	}
+
+	// Actually change the brick's position.
+	b.SetPixelPos(b.PixelPos.Plus(dif), w)
+	return
 }

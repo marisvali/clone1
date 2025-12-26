@@ -1,15 +1,30 @@
 package main
 
 import (
+	"github.com/goccy/go-yaml"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"gopkg.in/yaml.v3"
 	"slices"
 )
 
 func (g *Gui) Update() error {
+	defer g.HandlePanic()
+
 	if g.folderWatcher1.FolderContentsChanged() {
 		g.LoadGuiData()
+	}
+	if g.folderWatcher2.FolderContentsChanged() {
+		// Reset the world if the configuration has changed.
+		// This is useful for example while editing a test. You can edit, save,
+		// and the game will automatically reload and display the new version of
+		// the test.
+		g.LoadGuiData()
+		if g.LoadTest {
+			var test Test
+			LoadYAML(g.FSys, g.TestFile, &test)
+			g.playthrough.Level = test.GetLevel()
+		}
+		g.InitializeWorldToNewGame()
 	}
 
 	g.pointer = g.GetPointerState()
@@ -42,13 +57,17 @@ func (g *Gui) Update() error {
 
 func (g *Gui) UpdateHomeScreen() {
 	if g.JustPressed(playScreenMenuButton) {
-		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.InitializeWorldToNewGame()
 		g.state = PlayScreen
 	}
 }
 
 func (g *Gui) UpdatePlayScreen() {
+	if g.panicHappened {
+		return
+	}
 	if g.JustPressed(homeScreenMenuButton) {
+		g.uploadCurrentWorld()
 		g.state = PausedScreen
 		return
 	}
@@ -59,13 +78,16 @@ func (g *Gui) UpdatePlayScreen() {
 	input.JustReleased = g.pointer.JustReleased
 	input.Pos = g.ScreenToWorld(g.pointer.Pos)
 	if g.JustPressedKey(ebiten.KeyEscape) {
+		g.uploadCurrentWorld()
 		g.state = PausedScreen
 		return
 	}
 	if g.JustPressedKey(ebiten.KeyR) {
-		input.ResetWorld = true
+		g.uploadCurrentWorld()
+		g.ResetWorld()
 	}
 	if g.JustPressedKey(ebiten.KeyC) {
+		g.uploadCurrentWorld()
 		input.TriggerComingUp = true
 	}
 
@@ -92,14 +114,17 @@ func (g *Gui) UpdatePlayScreen() {
 			g.accumulatedInput.Pos = input.Pos
 		}
 	}
-	if g.frameIdx%g.slowdownFactor == 0 {
+	if g.frameIdx%g.SlowdownFactor == 0 {
 		// Save the input in the playthrough.
 		g.playthrough.History = append(g.playthrough.History, g.accumulatedInput)
-		if g.recordingFile != "" {
-			// IMPORTANT: save the playthrough before stepping the World. If
-			// a bug in the World causes it to crash, we want to save the input
-			// that caused the bug before the program crashes.
-			// WriteFile(g.recordingFile, g.playthrough.Serialize())
+		// IMPORTANT: save the playthrough before stepping the World. If
+		// a bug in the World causes it to crash, we want to save the input
+		// that caused the bug before the program crashes.
+		if g.RecordToFile {
+			WriteFile(g.RecordingFile, g.playthrough.Serialize())
+		}
+		if g.frameIdx%60 == 0 {
+			g.uploadCurrentWorld()
 		}
 
 		// Step the world.
@@ -119,9 +144,11 @@ func (g *Gui) UpdatePlayScreen() {
 	g.frameIdx++
 
 	if g.world.State == Lost {
+		g.uploadCurrentWorld()
 		g.state = GameOverScreen
 	}
 	if g.world.State == Won {
+		g.uploadCurrentWorld()
 		g.state = GameWonScreen
 	}
 }
@@ -133,7 +160,7 @@ func (g *Gui) UpdatePausedScreen() {
 		g.state = PlayScreen
 	}
 	if g.JustPressed(pausedScreenRestartButton) {
-		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.InitializeWorldToNewGame()
 		g.state = PlayScreen
 	}
 	if g.JustPressed(pausedScreenHomeButton) {
@@ -143,7 +170,7 @@ func (g *Gui) UpdatePausedScreen() {
 
 func (g *Gui) UpdateGameOverScreen() {
 	if g.JustPressed(gameOverScreenRestartButton) {
-		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.InitializeWorldToNewGame()
 		g.state = PlayScreen
 	}
 	if g.JustPressed(gameOverScreenHomeButton) {
@@ -153,7 +180,7 @@ func (g *Gui) UpdateGameOverScreen() {
 
 func (g *Gui) UpdateGameWonScreen() {
 	if g.JustPressed(gameWonScreenRestartButton) {
-		g.world = NewWorldFromPlaythrough(g.playthrough)
+		g.InitializeWorldToNewGame()
 		g.state = PlayScreen
 	}
 	if g.JustPressed(gameWonScreenHomeButton) {
@@ -222,7 +249,15 @@ func (g *Gui) UpdatePlayback() {
 		targetFrameIdx = nFrames - 1
 	}
 
-	if targetFrameIdx != g.frameIdx {
+	if targetFrameIdx > g.frameIdx {
+		// Advance the world.
+		for i := g.frameIdx; i < targetFrameIdx; i++ {
+			g.world.Step(g.playthrough.History[i])
+		}
+
+		// Set the current frame idx.
+		g.frameIdx = targetFrameIdx
+	} else if targetFrameIdx < g.frameIdx {
 		// Rewind.
 		g.world = NewWorldFromPlaythrough(g.playthrough)
 
@@ -353,13 +388,23 @@ func (g *Gui) GetPointerState() PointerState {
 }
 
 func LoadUserData(username string) (data UserData) {
-	s := GetUserDataHttp(username)
+	var s string
+	for i := 1; i < 3; i++ {
+		// This might fail, but we really do not care that much. The game should
+		// not be interrupted by this function failing. If it does fail, just
+		// try a couple more times, then give up.
+		var err error
+		s, err = GetUserDataHttp(username)
+		if err == nil {
+			break
+		}
+	}
 	err := yaml.Unmarshal([]byte(s), &data)
 	Check(err)
 	return
 }
 
-func UploadUserData(username string, ch chan UserData) {
+func (g *Gui) UploadUserData(username string, ch chan UserData) {
 	for {
 		// Receive a struct from the channel.
 		// Blocks until a struct is received.
@@ -368,6 +413,14 @@ func UploadUserData(username string, ch chan UserData) {
 		// Upload the data.
 		bytes, err := yaml.Marshal(data)
 		Check(err)
-		SetUserDataHttp(username, string(bytes))
+		for i := 1; i < 3; i++ {
+			// This might fail, but we really do not care that much. The game
+			// should not be interrupted by this function failing. If it does
+			// fail, just try a couple more times, then give up.
+			err = SetUserDataHttp(username, string(bytes))
+			if err == nil {
+				break
+			}
+		}
 	}
 }
