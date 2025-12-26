@@ -84,7 +84,7 @@ func (g *Gui) UpdatePlayScreen() {
 	}
 	if g.JustPressedKey(ebiten.KeyR) {
 		g.uploadCurrentWorld()
-		input.ResetWorld = true
+		g.InitializeWorldToNewGame()
 	}
 	if g.JustPressedKey(ebiten.KeyC) {
 		g.uploadCurrentWorld()

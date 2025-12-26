@@ -282,6 +282,27 @@ func (g *Gui) InitializeWorldToNewGame() {
 	g.world = NewWorldFromPlaythrough(g.playthrough)
 }
 
+func (g *Gui) ResetWorld() {
+	// Create a new world, with a new Id and a new playthrough History, but the
+	// same Seed.
+	g.playthrough.Id = uuid.New()
+	g.playthrough.History = g.playthrough.History[:0]
+	g.playthrough.AllowOverlappingDrags = g.AllowOverlappingDrags
+	for i := 1; i < 3; i++ {
+		// This might fail, but we really do not care that much. The game should
+		// not be interrupted by this function failing. If it does fail, just
+		// try a couple more times, then give up.
+		err := InitializeIdInDbHttp(g.username,
+			g.playthrough.ReleaseVersion,
+			g.playthrough.SimulationVersion,
+			g.playthrough.InputVersion,
+			g.playthrough.Id)
+		if err == nil {
+			break
+		}
+	}
+	g.world = NewWorldFromPlaythrough(g.playthrough)
+}
 func (g *Gui) HandlePanic() {
 	r := recover()
 	if r == nil {

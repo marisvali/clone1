@@ -336,12 +336,11 @@ type PlayerInput struct {
 	Pos             Pt
 	JustPressed     bool
 	JustReleased    bool
-	ResetWorld      bool
 	TriggerComingUp bool
 }
 
 func (p *PlayerInput) EventOccurred() bool {
-	return p.JustPressed || p.JustReleased || p.TriggerComingUp || p.ResetWorld
+	return p.JustPressed || p.JustReleased || p.TriggerComingUp
 }
 
 func NewWorld(seed int64, l Level) (w World) {
@@ -446,11 +445,6 @@ func (w *World) Initialize() {
 
 func (w *World) Step(input PlayerInput) {
 	w.JustMergedBricks = w.JustMergedBricks[:0]
-
-	// Reset the world.
-	if input.ResetWorld {
-		w.Initialize()
-	}
 
 	// Trigger a coming up event.
 	if input.TriggerComingUp {
