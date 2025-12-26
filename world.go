@@ -358,9 +358,7 @@ func NewWorld(seed int64, l Level) (w World) {
 		w.ColumnsBuffer[i] = make([]*Brick, NRows)
 	}
 	w.SlotsBuffer = NewMat(Pt{NCols, NRows})
-	// Should never resize, in fact resizing is an error, in fact:
-	// TODO: rethink having ChainedTo be a pointer between frames, since it can get invalidated by something like a reallocation, seems fickle
-	// WARNING: it can also get invalidated by something like w.Bricks = slices.Clone(..)
+	// Pre-allocate. It's fine if it resizes, but it shouldn't be necessary.
 	w.Bricks = make([]Brick, 0, NCols*(NRows+1))
 
 	// Transform Level parameters into the World's initial state.
@@ -703,12 +701,9 @@ func (w *World) UpdateCanonicalBricks() {
 	w.ConvergeTowardsCanonicalPositions()
 }
 
-var bricksBuffer []*Brick = make([]*Brick, 0, NCols*(NRows+1))
-
 // MarkFallingBricks checks if any canonical brick should start falling and
 // changes its state.
 func (w *World) MarkFallingBricks() {
-	// Checks if any canonical brick should start falling.
 	for i := range w.Bricks {
 		b := &w.Bricks[i]
 
@@ -738,9 +733,9 @@ func (w *World) MarkFallingBricks() {
 		if b.ChainedTo != 0 {
 			// Check the chained brick as well.
 			// Checking underneath the chained brick is only relevant for a
-			// horizontally chained bricked but it doesn't hurt logically or
-			// computationally for the vertically chained brick so do the same
-			// operation in both cases.
+			// horizontally chained brick but it doesn't hurt logically or
+			// computationally to do the same operation for vertically chained
+			// bricks as well.
 			b2 := w.GetBrick(b.ChainedTo)
 			w.GetObstacles(b2, IncludingTop, &w.ObstaclesBuffer)
 			r2 := b2.Bounds
@@ -1361,6 +1356,8 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 	panic("unhandled movement type")
 }
 
+// MoveBrickHelper moves a brick while considering obstacles, and takes into
+// account the follower brick if we are dealing with chained bricks.
 func (w *World) MoveBrickHelper(
 	b *Brick,
 	targetPos Pt,

@@ -190,11 +190,6 @@ func main() {
 		// Check if folder contents changed but do nothing with the result
 		// because we just want the watchers to initialize their internal
 		// structures with the current timestamps of files.
-		// This is necessary if we want to avoid creating a new world
-		// immediately after the first world is created, every time.
-		// I want to avoid creating a new world for now because it changes the
-		// id of the current world and it messes up the upload of the world
-		// to the database.
 		g.folderWatcher1.FolderContentsChanged()
 		g.folderWatcher2.FolderContentsChanged()
 	}
@@ -345,9 +340,10 @@ func (g *Gui) HandlePanic() {
 		errorMsg,
 		g.playthrough.Serialize())
 
-	// Resume panic, we have no recovery solutions.
-	// panic(r)
-	// TODO: decide best course of action here, panic or display error to user
+	// Swallow the panic and display the error to the user. This is preferred
+	// because if an error happens, it will most likely be on someone's phone.
+	// At that point, the best they can do is take a screenshot and send it to
+	// me.
 	g.panicHappened = true
 	g.panicMsg = errorMsg[:min(len(errorMsg), 1300)]
 }

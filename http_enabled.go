@@ -15,7 +15,7 @@ import (
 // makeHttpRequest makes a POST HTTP request to an endpoint and returns the
 // body of the response as a string. It returns an error if the call to the
 // server fails. Other errors are considered programmer errors and cause a
-// panic as with regular functions.
+// panic.
 func makeHttpRequest(
 	url string,
 	fields map[string]string,
