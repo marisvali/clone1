@@ -656,21 +656,17 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 		// Get the set of rectangles the brick must not intersect.
 		w.GetObstacles(dragged, IncludingTop, &w.ObstaclesBuffer)
 
-		// If the dragged brick intersects something, it becomes canonical and the
-		// behavior of canonical bricks will resolve the intersection.
+		// If the dragged brick intersects something, it becomes canonical and
+		// the behavior of canonical bricks will resolve the intersection.
 		if RectIntersectsRects(dragged.Bounds, w.ObstaclesBuffer) {
 			dragged.State = Canonical
 			return
 		}
 
+		// Also check if the follower intersects something.
 		if dragged.ChainedTo != 0 {
 			b2 := w.GetBrick(dragged.ChainedTo)
-
-			// Get the set of rectangles the brick must not intersect.
 			w.GetObstacles(b2, IncludingTop, &w.ObstaclesBuffer)
-
-			// If the dragged brick intersects something, it becomes canonical and the
-			// behavior of canonical bricks will resolve the intersection.
 			if RectIntersectsRects(b2.Bounds, w.ObstaclesBuffer) {
 				dragged.State = Canonical
 				return
