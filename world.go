@@ -654,11 +654,11 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 		w.MoveBrick(dragged, targetPos, w.DragSpeed, IgnoreObstacles)
 	} else {
 		// Get the set of rectangles the brick must not intersect.
-		obstacles := w.GetObstacles(dragged, IncludingTop)
+		w.GetObstacles(dragged, IncludingTop, &w.ObstaclesBuffer)
 
 		// If the dragged brick intersects something, it becomes canonical and the
 		// behavior of canonical bricks will resolve the intersection.
-		if RectIntersectsRects(dragged.Bounds, obstacles) {
+		if RectIntersectsRects(dragged.Bounds, w.ObstaclesBuffer) {
 			dragged.State = Canonical
 			return
 		}
@@ -667,11 +667,11 @@ func (w *World) UpdateDraggedBrick(input PlayerInput) {
 			b2 := w.GetBrick(dragged.ChainedTo)
 
 			// Get the set of rectangles the brick must not intersect.
-			obstacles2 := w.GetObstacles(b2, IncludingTop)
+			w.GetObstacles(b2, IncludingTop, &w.ObstaclesBuffer)
 
 			// If the dragged brick intersects something, it becomes canonical and the
 			// behavior of canonical bricks will resolve the intersection.
-			if RectIntersectsRects(b2.Bounds, obstacles2) {
+			if RectIntersectsRects(b2.Bounds, w.ObstaclesBuffer) {
 				dragged.State = Canonical
 				return
 			}
@@ -738,10 +738,10 @@ func (w *World) MarkFallingBricks() {
 		}
 
 		// Check if the brick or the slot underneath intersects other bricks.
-		obstacles := w.GetObstacles(b, IncludingTop)
+		w.GetObstacles(b, IncludingTop, &w.ObstaclesBuffer)
 		r := b.Bounds
 		r.Max.Y += BrickPixelSize + BrickMarginPixelSize
-		if RectIntersectsRects(r, obstacles) {
+		if RectIntersectsRects(r, w.ObstaclesBuffer) {
 			continue
 		}
 
@@ -752,10 +752,10 @@ func (w *World) MarkFallingBricks() {
 			// computationally for the vertically chained brick so do the same
 			// operation in both cases.
 			b2 := w.GetBrick(b.ChainedTo)
-			obstacles2 := w.GetObstacles(b2, IncludingTop)
+			w.GetObstacles(b2, IncludingTop, &w.ObstaclesBuffer)
 			r2 := b2.Bounds
 			r2.Max.Y += BrickPixelSize + BrickMarginPixelSize
-			if RectIntersectsRects(r2, obstacles2) {
+			if RectIntersectsRects(r2, w.ObstaclesBuffer) {
 				continue
 			}
 		}
@@ -1250,13 +1250,12 @@ const (
 
 // GetObstacles returns all the obstacles for a certain brick, as rectangles.
 // This includes walls and other bricks that have different values than b.
-func (w *World) GetObstacles(b *Brick,
-	o GetObstaclesOption) (obstacles []Rectangle) {
-	// TODO: think of what to do about the line below, the ObstaclesBuffer is
-	// a performance enhancer, but only if you are using a single buffer at once
-	// Maybe the caller should give the buffer to the function, in general.
-	// Maybe buffers should come from outside.
-	// obstacles = w.ObstaclesBuffer[:0]
+func (w *World) GetObstacles(
+	b *Brick,
+	o GetObstaclesOption,
+	buffer *[]Rectangle) {
+
+	obstacles := (*buffer)[:0]
 	for j := range w.Bricks {
 		otherB := &w.Bricks[j]
 		if otherB == b || otherB.Id == b.ChainedTo {
@@ -1286,7 +1285,7 @@ func (w *World) GetObstacles(b *Brick,
 	}
 	obstacles = append(obstacles, leftRect)
 	obstacles = append(obstacles, rightRect)
-	return
+	*buffer = obstacles
 }
 
 type MoveType int64
@@ -1380,8 +1379,9 @@ func (w *World) MoveBrickHelper(
 ) (nPixelsLeft int64) {
 
 	// Check how much the leader brick can move.
+	w.GetObstacles(b, o, &w.ObstaclesBuffer)
 	newR, nPixelsLeft := MoveRect(b.Bounds, targetPos, nMaxPixels,
-		w.GetObstacles(b, o))
+		w.ObstaclesBuffer)
 	dif := newR.Min.Minus(b.Bounds.Min)
 
 	if b.ChainedTo > 0 {
@@ -1390,8 +1390,9 @@ func (w *World) MoveBrickHelper(
 		targetPos2 := b2.PixelPos.Plus(targetPos.Minus(b.PixelPos))
 
 		// Check how much the follower brick can move.
+		w.GetObstacles(b2, o, &w.ObstaclesBuffer)
 		newR2, nPixelsLeft2 := MoveRect(b2.Bounds, targetPos2, nMaxPixels,
-			w.GetObstacles(b2, o))
+			w.ObstaclesBuffer)
 		dif2 := newR2.Min.Minus(b2.Bounds.Min)
 
 		// If the follower brick can move less than the leader brick, limit the
