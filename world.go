@@ -242,7 +242,7 @@ type Level struct {
 type Brick struct {
 	Id  int64
 	Val int64
-	// This should only be set by SetPixelPos.
+	// This should only be set by SetBrickPos.
 	PixelPos     Pt
 	State        BrickState
 	FallingSpeed int64
@@ -266,17 +266,17 @@ func (w *World) NewBrick(pixelPos Pt, val int64) Brick {
 		Val:   val,
 		State: Canonical,
 	}
-	b.SetPixelPos(pixelPos, w)
+	w.SetBrickPos(&b, pixelPos)
 	w.NextBrickId++
 	return b
 }
 
-func (b *Brick) SetPixelPos(newPos Pt, w *World) {
+func (w *World) SetBrickPos(b *Brick, newPos Pt) {
 	if b.ChainedTo > 0 {
 		b2 := w.GetBrick(b.ChainedTo)
 		if b2.State == Follower {
 			dif := newPos.Minus(b.PixelPos)
-			b2.SetPixelPos(b2.PixelPos.Plus(dif), w)
+			w.SetBrickPos(b2, b2.PixelPos.Plus(dif))
 		}
 	}
 
@@ -407,6 +407,8 @@ func ChainBricks(b1 *Brick, b2 *Brick) {
 			b1.CanonicalPos.X+1 == b2.CanonicalPos.X) ||
 			(b1.CanonicalPos.Y+1 == b2.CanonicalPos.Y &&
 				b1.CanonicalPos.X == b2.CanonicalPos.X))
+	Assert(b1.ChainedTo == 0)
+	Assert(b2.ChainedTo == 0)
 	b1.ChainedTo = b2.Id
 	b2.ChainedTo = b1.Id
 	b2.State = Follower
@@ -1159,7 +1161,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 			// Skip follower bricks otherwise they get moved twice.
 			continue
 		}
-		w.Bricks[i].SetPixelPos(newPos, w)
+		w.SetBrickPos(&w.Bricks[i], newPos)
 	}
 	w.ComingUpDistanceLeft -= w.ComingUpSpeed
 	w.ComingUpSpeed -= w.ComingUpDeceleration
@@ -1286,7 +1288,7 @@ func (w *World) MoveBrick(b *Brick, targetPos Pt, nMaxPixels int64,
 	if moveType == IgnoreObstacles {
 		// Go towards the target pos, without considering any obstacles.
 		pts := GetLinePoints(b.PixelPos, targetPos, nMaxPixels)
-		b.SetPixelPos(pts[len(pts)-1], w)
+		w.SetBrickPos(b, pts[len(pts)-1])
 		return false
 	}
 
@@ -1383,6 +1385,6 @@ func (w *World) MoveBrickHelper(
 	}
 
 	// Actually change the brick's position.
-	b.SetPixelPos(b.PixelPos.Plus(dif), w)
+	w.SetBrickPos(b, b.PixelPos.Plus(dif))
 	return
 }

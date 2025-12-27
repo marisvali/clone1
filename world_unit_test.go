@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/stretchr/testify/assert"
 	"math"
 	"testing"
@@ -62,7 +61,7 @@ func TestSetPixelPos(t *testing.T) {
 			Min: pixelPos,
 			Max: pixelPos.Plus(Pt{BrickPixelSize, BrickPixelSize})}
 
-		b.SetPixelPos(pixelPos, &w)
+		w.SetBrickPos(&b, pixelPos)
 		assert.Equal(t, pixelPos, b.PixelPos)
 		assert.Equal(t, canonicalPos, b.CanonicalPos)
 		assert.Equal(t, canonicalPixelPos, b.CanonicalPixelPos)
@@ -85,15 +84,15 @@ func TestSetPixelPos(t *testing.T) {
 		b2.State = BrickState(RInt(0, 2))
 
 		// Set positions. The bricks are unchained still so we're using the
-		// SetPixelPos functionality verified above.
-		b1.SetPixelPos(RPosLeader(), &w)
+		// SetBrickPos functionality verified above.
+		w.SetBrickPos(b1, RPosLeader())
 		b2Pos := b1.PixelPos
 		if RInt(0, 1) == 0 {
 			b2Pos.X += BrickPixelSize + BrickMarginPixelSize
 		} else {
 			b2Pos.Y -= BrickPixelSize + BrickMarginPixelSize
 		}
-		b2.SetPixelPos(b2Pos, &w)
+		w.SetBrickPos(b2, b2Pos)
 
 		// Chain bricks.
 		ChainBricks(b1, b2)
@@ -106,7 +105,7 @@ func TestSetPixelPos(t *testing.T) {
 		dif := newPos1.Minus(oldPos1)
 		newPos2 := oldPos2.Plus(dif)
 
-		b1.SetPixelPos(newPos1, &w)
+		w.SetBrickPos(b1, newPos1)
 		assert.Equal(t, newPos2, b2.PixelPos)
 	}
 
@@ -160,9 +159,9 @@ func TestChainBricks(t *testing.T) {
 
 	// Do bricks really get chained (reference each other)?
 	// Does the second brick really become a follower?
-	var b1, b2 Brick
-	b2.CanonicalPos.X = 1
 	for range 10 {
+		var b1, b2 Brick
+		b2.CanonicalPos.X = 1
 		b1.Id = RInt(0, 10000)
 		b2.Id = b1.Id + RInt(1, 10000)
 		state1 := BrickState(RInt(0, 2))
@@ -279,7 +278,7 @@ func TestUnchainBrick(t *testing.T) {
 		} else {
 			b2Pos.Y -= BrickPixelSize + BrickMarginPixelSize
 		}
-		b2.SetPixelPos(b2Pos, &w)
+		w.SetBrickPos(b2, b2Pos)
 
 		// Chain bricks.
 		ChainBricks(b1, b2)
@@ -378,7 +377,7 @@ func TestFindMergingBricks(t *testing.T) {
 						break
 					}
 				}
-				b1.SetPixelPos(RPosLeader(), &w)
+				w.SetBrickPos(b1, RPosLeader())
 
 				// Choose one that will be the follower.
 				var b2 *Brick
@@ -395,7 +394,7 @@ func TestFindMergingBricks(t *testing.T) {
 				} else {
 					b2Pos.Y -= BrickPixelSize + BrickMarginPixelSize
 				}
-				b2.SetPixelPos(b2Pos, &w)
+				w.SetBrickPos(b2, b2Pos)
 
 				// Chain bricks.
 				ChainBricks(b1, b2)
@@ -414,13 +413,13 @@ func TestFindMergingBricks(t *testing.T) {
 
 			// Put b1 at a position that is safe enough to put a chained brick
 			// close to it.
-			b1.SetPixelPos(Pt{RInt(100, PlayAreaWidth-320),
-				RInt(200, PlayAreaHeight-200)}, &w)
+			w.SetBrickPos(b1, Pt{RInt(100, PlayAreaWidth-320),
+				RInt(200, PlayAreaHeight-200)})
 
 			// Put b2 close to b1.
 			pos1 := b1.PixelPos
 			pos2 := pos1.Plus(Pt{RInt(-25, 25), RInt(-25, 25)})
-			b2.SetPixelPos(pos2, &w)
+			w.SetBrickPos(b2, pos2)
 
 			// Make b2 have the same value as b1.
 			b2.Val = b1.Val
@@ -511,7 +510,6 @@ func TestPixelPosToCanonicalPos(t *testing.T) {
 			}
 		}
 
-		fmt.Println(pixelPos)
 		assert.Contains(t, closestCanPos, PixelPosToCanonicalPos(pixelPos))
 	}
 }
