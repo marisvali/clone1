@@ -1,0 +1,549 @@
+package main
+
+import (
+	"fmt"
+	"github.com/stretchr/testify/assert"
+	"math"
+	"testing"
+)
+
+// RPos is a utility for getting a valid random position for a brick.
+func RPos() (p Pt) {
+	p.X = RInt(0, PlayAreaWidth-BrickPixelSize)
+	p.Y = RInt(0, PlayAreaHeight-BrickPixelSize)
+	return
+}
+
+// RPosLeader is a utility for getting a valid random position for a brick that
+// is meant to be the leader brick of a chained brick.
+func RPosLeader() (p Pt) {
+	p.X = RInt(0, PlayAreaWidth-BrickPixelSize-BrickPixelSize-BrickMarginPixelSize)
+	p.Y = RInt(BrickPixelSize+BrickMarginPixelSize, PlayAreaHeight-BrickPixelSize)
+	return
+}
+
+func TestNewBrick(t *testing.T) {
+	var w World
+
+	// Is the brick created correctly?
+	b := w.NewBrick(Pt{200, 327}, 3)
+	assert.Equal(t, Pt{200, 327}, b.PixelPos)
+	assert.Equal(t, Pt{1, 5}, b.CanonicalPos)
+	assert.Equal(t, int64(3), b.Val)
+
+	// If I create many bricks, will all the ids be unique?
+	RSeed(0)
+	var bricks []Brick
+	for range 100000 {
+		b = w.NewBrick(Pt{RInt(0, PlayAreaWidth-BrickPixelSize),
+			RInt(0, PlayAreaHeight-BrickPixelSize)}, RInt(1, 30))
+		bricks = append(bricks, b)
+	}
+
+	idExists := map[int64]bool{}
+	for _, b = range bricks {
+		assert.False(t, idExists[b.Id])
+		idExists[b.Id] = true
+	}
+}
+
+func TestSetPixelPos(t *testing.T) {
+	RSeed(0)
+
+	// Does setting the position set all the variables I expect of a brick?
+	// Ridiculous check, but check.
+	for range 10 {
+		var w World
+		var b Brick
+		pixelPos := RPos()
+		canonicalPos := PixelPosToCanonicalPos(pixelPos)
+		canonicalPixelPos := CanonicalPosToPixelPos(canonicalPos)
+		bounds := Rectangle{
+			Min: pixelPos,
+			Max: pixelPos.Plus(Pt{BrickPixelSize, BrickPixelSize})}
+
+		b.SetPixelPos(pixelPos, &w)
+		assert.Equal(t, pixelPos, b.PixelPos)
+		assert.Equal(t, canonicalPos, b.CanonicalPos)
+		assert.Equal(t, canonicalPixelPos, b.CanonicalPixelPos)
+		assert.Equal(t, bounds, b.Bounds)
+	}
+
+	// Does setting the position of the brick also set the position of the
+	// chained brick?
+	for range 100 {
+		var w World
+		w.Bricks = make([]Brick, 2)
+		b1 := &w.Bricks[0]
+		b2 := &w.Bricks[1]
+
+		// Set ids.
+		b1.Id = RInt(0, 10000)
+		b2.Id = b1.Id + RInt(1, 10000)
+		state1 := BrickState(RInt(0, 2))
+		b1.State = state1
+		b2.State = BrickState(RInt(0, 2))
+
+		// Set positions. The bricks are unchained still so we're using the
+		// SetPixelPos functionality verified above.
+		b1.SetPixelPos(RPosLeader(), &w)
+		b2Pos := b1.PixelPos
+		if RInt(0, 1) == 0 {
+			b2Pos.X += BrickPixelSize + BrickMarginPixelSize
+		} else {
+			b2Pos.Y -= BrickPixelSize + BrickMarginPixelSize
+		}
+		b2.SetPixelPos(b2Pos, &w)
+
+		// Chain bricks.
+		ChainBricks(b1, b2)
+
+		// Check if now that bricks are chained, changing one brick changes
+		// the other.
+		oldPos1 := b1.PixelPos
+		newPos1 := RPosLeader()
+		oldPos2 := b2.PixelPos
+		dif := newPos1.Minus(oldPos1)
+		newPos2 := oldPos2.Plus(dif)
+
+		b1.SetPixelPos(newPos1, &w)
+		assert.Equal(t, newPos2, b2.PixelPos)
+	}
+
+	assert.Equal(t, true, true)
+}
+
+func TestEventOccurred(t *testing.T) {
+	// Most ridiculous test yet.
+	var p PlayerInput
+	assert.False(t, p.EventOccurred())
+	p.JustPressed = true
+	assert.True(t, p.EventOccurred())
+	p = PlayerInput{}
+	p.JustReleased = true
+	assert.True(t, p.EventOccurred())
+	p = PlayerInput{}
+	p.TriggerComingUp = true
+	assert.True(t, p.EventOccurred())
+	p = PlayerInput{}
+	p.JustPressed = true
+	p.JustReleased = true
+	p.TriggerComingUp = true
+	assert.True(t, p.EventOccurred())
+}
+
+func TestNewWorld(t *testing.T) {
+	assert.Equal(t, true, true)
+}
+
+func TestGetBrick(t *testing.T) {
+	var w World
+	assert.Panics(t, func() { w.GetBrick(int64(12)) })
+
+	w.Bricks = make([]Brick, 1)
+	w.Bricks[0].Id = 3
+	assert.Panics(t, func() { w.GetBrick(int64(12)) })
+	assert.Equal(t, &w.Bricks[0], w.GetBrick(int64(3)))
+
+	w.Bricks = make([]Brick, 4)
+	w.Bricks[0].Id = 3
+	w.Bricks[1].Id = 13
+	w.Bricks[2].Id = 1
+	w.Bricks[3].Id = 25
+	assert.Equal(t, &w.Bricks[0], w.GetBrick(int64(3)))
+	assert.Equal(t, &w.Bricks[1], w.GetBrick(int64(13)))
+	assert.Equal(t, &w.Bricks[3], w.GetBrick(int64(25)))
+}
+
+func TestChainBricks(t *testing.T) {
+	RSeed(0)
+
+	// Do bricks really get chained (reference each other)?
+	// Does the second brick really become a follower?
+	var b1, b2 Brick
+	b2.CanonicalPos.X = 1
+	for range 10 {
+		b1.Id = RInt(0, 10000)
+		b2.Id = b1.Id + RInt(1, 10000)
+		state1 := BrickState(RInt(0, 2))
+		b1.State = state1
+		b2.State = BrickState(RInt(0, 2))
+		ChainBricks(&b1, &b2)
+		assert.Equal(t, b1.ChainedTo, b2.Id)
+		assert.Equal(t, b2.ChainedTo, b1.Id)
+		assert.Equal(t, b1.State, state1)
+		assert.Equal(t, b2.State, Follower)
+	}
+}
+
+func TestNewWorldFromPlaythrough(t *testing.T) {
+	assert.Equal(t, true, true)
+}
+
+func TestResetTimerCooldown(t *testing.T) {
+	// Is the index set?
+	var w World
+	w.TimerCooldownIdx = 432
+	w.ResetTimerCooldown()
+	assert.Equal(t, w.TimerCooldown, w.TimerCooldownIdx)
+
+	// Does the cooldown increase as max value increases?
+	w.Bricks = make([]Brick, 1)
+	prevCooldown := int64(0)
+	for i := int64(5); i < 30; i++ {
+		w.Bricks[0].Val = i
+		w.ResetTimerCooldown()
+		assert.Greater(t, w.TimerCooldown, prevCooldown)
+		prevCooldown = w.TimerCooldown
+	}
+}
+
+func TestStep(t *testing.T) {
+	assert.Equal(t, true, true)
+}
+
+func TestDetermineDraggedBrick(t *testing.T) {
+	assert.Equal(t, true, true)
+}
+
+func TestStepRegular(t *testing.T) {
+	assert.Equal(t, true, true)
+}
+
+func TestNoMoreMergesArePossible(t *testing.T) {
+	assert.Equal(t, true, true)
+}
+
+func TestUpdateDraggedBrick(t *testing.T) {
+	assert.Equal(t, true, true)
+}
+
+func TestBrickBounds(t *testing.T) {
+	// Ridiculous test. The value is that it made me double check this trivial
+	// function again.
+	for range 10 {
+		pos := RPos()
+		b := BrickBounds(pos)
+		assert.Equal(t, pos, b.Min)
+		assert.Equal(t, BrickPixelSize, b.Width())
+		assert.Equal(t, BrickPixelSize, b.Height())
+	}
+}
+
+func TestUpdateFallingBricks(t *testing.T) {
+	assert.Equal(t, true, true)
+}
+
+func TestUpdateCanonicalBricks(t *testing.T) {
+	assert.Equal(t, true, true)
+}
+
+func TestMarkFallingBricks(t *testing.T) {
+	assert.Equal(t, true, true)
+}
+
+func TestConvergeTowardsCanonicalPositions(t *testing.T) {
+	assert.Equal(t, true, true)
+}
+
+func TestMergeBricks(t *testing.T) {
+	assert.Equal(t, true, true)
+}
+
+func TestUnchainBrick(t *testing.T) {
+	RSeed(0)
+
+	for range 1 {
+		// Fill the world with bricks.
+		var w World
+		for range 100 {
+			b := w.NewBrick(RPos(), RInt(1, 30))
+			b.State = BrickState(RInt(0, 2))
+			w.Bricks = append(w.Bricks, b)
+		}
+
+		// Choose one to be the leader.
+		b1 := &w.Bricks[RInt(0, int64(len(w.Bricks)-1))]
+		// Choose one that will be the follower.
+		var b2 *Brick
+		for {
+			b2 = &w.Bricks[RInt(0, int64(len(w.Bricks)-1))]
+			if b1 != b2 {
+				break
+			}
+		}
+		// Set the position of the follower to be suitable for chaining.
+		b2Pos := b1.PixelPos
+		if RInt(0, 1) == 0 {
+			b2Pos.X += BrickPixelSize + BrickMarginPixelSize
+		} else {
+			b2Pos.Y -= BrickPixelSize + BrickMarginPixelSize
+		}
+		b2.SetPixelPos(b2Pos, &w)
+
+		// Chain bricks.
+		ChainBricks(b1, b2)
+
+		// Unchain bricks.
+		w.UnchainBrick(b1)
+
+		// Check that the bricks are properly unchained.
+		// No more references.
+		assert.Equal(t, b1.ChainedTo, int64(0))
+		assert.Equal(t, b2.ChainedTo, int64(0))
+		// And the follower is no longer a follower.
+		assert.Equal(t, b1.State, b2.State)
+	}
+}
+
+func TestFindMergingBricks(t *testing.T) {
+	RSeed(0)
+	{
+		// Insufficient bricks = no merge.
+		var w World
+		foundMerge, _, _ := w.FindMergingBricks()
+		assert.Equal(t, false, foundMerge)
+	}
+	{
+		// Insufficient bricks = no merge.
+		var w World
+		w.Bricks = append(w.Bricks, w.NewBrick(RPos(), 3))
+		foundMerge, _, _ := w.FindMergingBricks()
+		assert.Equal(t, false, foundMerge)
+	}
+	{
+		// Random positions, different values = no merge.
+		for range 10 {
+			var w World
+			w.Bricks = append(w.Bricks, w.NewBrick(RPos(), 3))
+			w.Bricks = append(w.Bricks, w.NewBrick(RPos(), 4))
+			foundMerge, _, _ := w.FindMergingBricks()
+			assert.Equal(t, false, foundMerge)
+		}
+	}
+	{
+		// Same position, different values = no merge.
+		var w World
+		pos := RPos()
+		w.Bricks = append(w.Bricks, w.NewBrick(pos, 3))
+		w.Bricks = append(w.Bricks, w.NewBrick(pos, 4))
+		foundMerge, _, _ := w.FindMergingBricks()
+		assert.Equal(t, false, foundMerge)
+	}
+	{
+		// Same position, same value = merge.
+		for range 10 {
+			var w World
+			pos := RPos()
+			w.Bricks = append(w.Bricks, w.NewBrick(pos, 3))
+			w.Bricks = append(w.Bricks, w.NewBrick(pos, 3))
+			foundMerge, i, j := w.FindMergingBricks()
+			assert.Equal(t, true, foundMerge)
+			assert.True(t, i == 0 && j == 1 || i == 1 && j == 0)
+		}
+	}
+	{
+		// Close positions, same value = merge.
+		for range 100 {
+			var w World
+			pos1 := Pt{RInt(100, PlayAreaWidth-320),
+				RInt(200, PlayAreaHeight-200)}
+			pos2 := pos1.Plus(Pt{RInt(-25, 25), RInt(-25, 25)})
+			val := RInt(1, 30)
+			w.Bricks = append(w.Bricks, w.NewBrick(pos1, val))
+			w.Bricks = append(w.Bricks, w.NewBrick(pos2, val))
+			foundMerge, i, j := w.FindMergingBricks()
+			assert.Equal(t, true, foundMerge)
+			assert.True(t, i == 0 && j == 1 || i == 1 && j == 0)
+		}
+	}
+	{
+		// Find mergeable bricks among many.
+		for range 100 {
+			// Fill the world with bricks.
+			var w World
+			for i := 1; i < 30; i++ {
+				b := w.NewBrick(RPos(), int64(i))
+				b.State = BrickState(RInt(0, 2))
+				w.Bricks = append(w.Bricks, b)
+			}
+
+			// Chain some of the bricks.
+			for range RInt(0, 7) {
+				// Choose one to be the leader.
+				var b1 *Brick
+				for {
+					b1 = &w.Bricks[RInt(0, int64(len(w.Bricks)-1))]
+					if b1.ChainedTo == 0 {
+						break
+					}
+				}
+				b1.SetPixelPos(RPosLeader(), &w)
+
+				// Choose one that will be the follower.
+				var b2 *Brick
+				for {
+					b2 = &w.Bricks[RInt(0, int64(len(w.Bricks)-1))]
+					if b2.ChainedTo == 0 && b1 != b2 {
+						break
+					}
+				}
+				// Set the position of the follower to be suitable for chaining.
+				b2Pos := b1.PixelPos
+				if RInt(0, 1) == 0 {
+					b2Pos.X += BrickPixelSize + BrickMarginPixelSize
+				} else {
+					b2Pos.Y -= BrickPixelSize + BrickMarginPixelSize
+				}
+				b2.SetPixelPos(b2Pos, &w)
+
+				// Chain bricks.
+				ChainBricks(b1, b2)
+			}
+
+			// Choose two different bricks.
+			b1 := &w.Bricks[RInt(0, int64(len(w.Bricks)-1))]
+			// Choose one that is different and is not a follower.
+			var b2 *Brick
+			for {
+				b2 = &w.Bricks[RInt(0, int64(len(w.Bricks)-1))]
+				if b2.State != Follower && b1 != b2 {
+					break
+				}
+			}
+
+			// Put b1 at a position that is safe enough to put a chained brick
+			// close to it.
+			b1.SetPixelPos(Pt{RInt(100, PlayAreaWidth-320),
+				RInt(200, PlayAreaHeight-200)}, &w)
+
+			// Put b2 close to b1.
+			pos1 := b1.PixelPos
+			pos2 := pos1.Plus(Pt{RInt(-25, 25), RInt(-25, 25)})
+			b2.SetPixelPos(pos2, &w)
+
+			// Make b2 have the same value as b1.
+			b2.Val = b1.Val
+
+			// Get the indexes of the two bricks.
+			var b1Idx, b2Idx int
+			for i := range w.Bricks {
+				if b1.Id == w.Bricks[i].Id {
+					b1Idx = i
+				}
+				if b2.Id == w.Bricks[i].Id {
+					b2Idx = i
+				}
+			}
+
+			val := RInt(1, 30)
+			w.Bricks = append(w.Bricks, w.NewBrick(pos1, val))
+			w.Bricks = append(w.Bricks, w.NewBrick(pos2, val))
+			foundMerge, i, j := w.FindMergingBricks()
+			assert.Equal(t, true, foundMerge)
+			assert.True(t, i == b1Idx && j == b2Idx || i == b2Idx && j == b1Idx)
+		}
+	}
+}
+
+func TestCreateFirstRowsOfBricks(t *testing.T) {
+
+	// Are there 2 rows
+	assert.Equal(t, true, true)
+}
+
+func TestCurrentMaxVal(t *testing.T) {
+	var w World
+	w.Bricks = make([]Brick, 0)
+	assert.Equal(t, int64(0), w.CurrentMaxVal())
+
+	w.Bricks = make([]Brick, 1)
+	w.Bricks[0].Val = 17
+	assert.Equal(t, int64(17), w.CurrentMaxVal())
+
+	w.Bricks = make([]Brick, 3)
+	w.Bricks[0].Val = 17
+	w.Bricks[1].Val = 23
+	w.Bricks[2].Val = 12
+	assert.Equal(t, int64(23), w.CurrentMaxVal())
+
+	w.Bricks = make([]Brick, 3)
+	w.Bricks[0].Val = 17
+	w.Bricks[1].Val = 23
+	w.Bricks[2].Val = 30
+	assert.Equal(t, int64(30), w.CurrentMaxVal())
+}
+
+func TestCreateNewRowOfBricks(t *testing.T) {
+	// 5
+	// This actually deserves a bunch of tests.
+	// var w World
+	// w.CreateNewRowOfBricks()
+	assert.Equal(t, true, true)
+}
+
+func TestStepComingUp(t *testing.T) {
+	// 5
+	assert.Equal(t, true, true)
+}
+
+func TestPixelPosToCanonicalPos(t *testing.T) {
+	RSeed(0)
+
+	// Does it truly give me the closest canonical pos?
+	for range 1000 {
+		pixelPos := RPos()
+		minDist := int64(math.MaxInt64)
+		var closestCanPos []Pt
+		for x := int64(0); x < 6; x++ {
+			for y := int64(0); y < 8; y++ {
+				canPos := Pt{x, y}
+				canPixelPos := CanonicalPosToPixelPos(canPos)
+				dist := pixelPos.SquaredDistTo(canPixelPos)
+				if dist == minDist {
+					closestCanPos = append(closestCanPos, canPos)
+				}
+				if dist < minDist {
+					closestCanPos = closestCanPos[:0]
+					minDist = dist
+					closestCanPos = append(closestCanPos, canPos)
+				}
+			}
+		}
+
+		fmt.Println(pixelPos)
+		assert.Contains(t, closestCanPos, PixelPosToCanonicalPos(pixelPos))
+	}
+}
+
+func TestCanonicalPosToPixelPos(t *testing.T) {
+	// Does the mapping work for a few points?
+	assert.Equal(t, Pt{0, PlayAreaHeight - BrickPixelSize}, CanonicalPosToPixelPos(Pt{0, 0}))
+	assert.Equal(t, Pt{0, PlayAreaHeight - BrickPixelSize - BrickPixelSize - BrickMarginPixelSize}, CanonicalPosToPixelPos(Pt{0, 1}))
+	assert.Equal(t, Pt{BrickPixelSize + BrickMarginPixelSize, PlayAreaHeight - BrickPixelSize}, CanonicalPosToPixelPos(Pt{1, 0}))
+	assert.Equal(t, Pt{3 * (BrickPixelSize + BrickMarginPixelSize), PlayAreaHeight - 3*BrickPixelSize - 2*BrickMarginPixelSize}, CanonicalPosToPixelPos(Pt{3, 2}))
+}
+
+func TestPixelPosToCanonicalPixelPos(t *testing.T) {
+	RSeed(0)
+
+	// Ridiculous check, but check.
+	for range 10 {
+		pixelPos := RPos()
+		expected := CanonicalPosToPixelPos(PixelPosToCanonicalPos(pixelPos))
+		assert.Equal(t, expected, PixelPosToCanonicalPixelPos(pixelPos))
+	}
+	assert.Equal(t, true, true)
+}
+
+func TestGetObstacles(t *testing.T) {
+	assert.Equal(t, true, true)
+}
+
+func TestMoveBrick(t *testing.T) {
+	assert.Equal(t, true, true)
+}
+
+func TestMoveBrickHelper(t *testing.T) {
+	assert.Equal(t, true, true)
+}

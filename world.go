@@ -254,19 +254,19 @@ type Brick struct {
 	Bounds            Rectangle
 }
 
-func (w *World) NewBrick(pos Pt, val int64) Brick {
+func (w *World) NewBrick(pixelPos Pt, val int64) Brick {
 	// Ensure the position is valid.
-	Assert(pos.X >= 0)
-	Assert(pos.X <= PlayAreaWidth-BrickPixelSize)
-	Assert(pos.Y >= 0)
-	Assert(pos.Y <= PlayAreaHeight+BrickMarginPixelSize)
+	Assert(pixelPos.X >= 0)
+	Assert(pixelPos.X <= PlayAreaWidth-BrickPixelSize)
+	Assert(pixelPos.Y >= 0)
+	Assert(pixelPos.Y <= PlayAreaHeight+BrickMarginPixelSize)
 
 	b := Brick{
 		Id:    w.NextBrickId,
 		Val:   val,
 		State: Canonical,
 	}
-	b.SetPixelPos(pos, w)
+	b.SetPixelPos(pixelPos, w)
 	w.NextBrickId++
 	return b
 }
@@ -323,8 +323,6 @@ type World struct {
 	MaxInitialBrickValue     int64
 	ObstaclesBuffer          []Rectangle
 	ColumnsBuffer            [][]*Brick
-	OriginalBricks           []Brick
-	OriginalChains           []ChainParams
 	FirstComingUp            bool
 	Score                    int64
 	JustMergedBricks         []*Brick
@@ -358,21 +356,39 @@ func NewWorld(seed int64, l Level) (w World) {
 		w.ColumnsBuffer[i] = make([]*Brick, NRows)
 	}
 	w.SlotsBuffer = NewMat(Pt{NCols, NRows})
-	// Pre-allocate. It's fine if it resizes, but it shouldn't be necessary.
 	w.Bricks = make([]Brick, 0, NCols*(NRows+1))
 
-	// Transform Level parameters into the World's initial state.
+	// Initialize the world from level parameters.
 	w.Seed = seed
+	w.RSeed(w.Seed)
 	w.TimerDisabled = l.TimerDisabled
 	w.AllowOverlappingDrags = l.AllowOverlappingDrags
-	for i := range l.BricksParams {
-		w.OriginalBricks = append(w.OriginalBricks, w.NewBrick(
-			l.BricksParams[i].Pos,
-			l.BricksParams[i].Val))
-	}
-	w.OriginalChains = slices.Clone(l.ChainsParams)
 
-	w.Initialize()
+	w.Bricks = w.Bricks[:0]
+	if len(l.BricksParams) == 0 {
+		// No bricks specified. Assume we can initialize a regular play.
+		w.CreateFirstRowsOfBricks()
+		w.ResetTimerCooldown()
+		w.TimerCooldownIdx = 0
+		w.SolvedFirstState = false
+		w.FirstComingUp = true
+		w.State = ComingUp
+	} else {
+		// Bricks specified. Assume this is a test and initialize based on the
+		// specifications.
+		for i := range l.BricksParams {
+			w.Bricks = append(w.Bricks, w.NewBrick(
+				l.BricksParams[i].Pos,
+				l.BricksParams[i].Val))
+		}
+		for _, c := range l.ChainsParams {
+			ChainBricks(&w.Bricks[c.Brick1], &w.Bricks[c.Brick2])
+		}
+		w.ResetTimerCooldown()
+		w.SolvedFirstState = false
+		w.FirstComingUp = false
+		w.State = Regular
+	}
 	return w
 }
 
@@ -415,30 +431,6 @@ func (w *World) ResetTimerCooldown() {
 	// frames: 678 + 12 * maxValue
 	w.TimerCooldown = 678 + 12*w.CurrentMaxVal()
 	w.TimerCooldownIdx = w.TimerCooldown
-}
-
-func (w *World) Initialize() {
-	w.RSeed(w.Seed)
-	w.Bricks = w.Bricks[:0]
-	if len(w.OriginalBricks) == 0 {
-		w.CreateFirstRowsOfBricks()
-		w.ResetTimerCooldown()
-		w.TimerCooldownIdx = 0
-		w.SolvedFirstState = false
-		w.FirstComingUp = true
-		w.State = ComingUp
-	} else {
-		for _, b := range w.OriginalBricks {
-			w.Bricks = append(w.Bricks, b)
-		}
-		for _, c := range w.OriginalChains {
-			ChainBricks(&w.Bricks[c.Brick1], &w.Bricks[c.Brick2])
-		}
-		w.ResetTimerCooldown()
-		w.SolvedFirstState = false
-		w.FirstComingUp = false
-		w.State = Regular
-	}
 }
 
 func (w *World) Step(input PlayerInput) {
@@ -919,11 +911,11 @@ func (w *World) MergeBricks() {
 		// position.
 		b1 := &w.Bricks[i]
 		b2 := &w.Bricks[j]
-		canPos1 := PixelPosToCanonicalPixelPos(b1.PixelPos)
-		dif1 := b1.PixelPos.SquaredDistTo(canPos1)
+		canPixelPos1 := PixelPosToCanonicalPixelPos(b1.PixelPos)
+		dif1 := b1.PixelPos.SquaredDistTo(canPixelPos1)
 
-		canPos2 := PixelPosToCanonicalPixelPos(b2.PixelPos)
-		dif2 := b2.PixelPos.SquaredDistTo(canPos2)
+		canPixelPos2 := PixelPosToCanonicalPixelPos(b2.PixelPos)
+		dif2 := b2.PixelPos.SquaredDistTo(canPixelPos2)
 
 		var idxToRemove int
 		var brickToUpdate *Brick
