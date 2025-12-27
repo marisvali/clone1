@@ -877,8 +877,11 @@ func (w *World) ConvergeTowardsCanonicalPositions() {
 	}
 }
 
+// MergeBricks performs merges between all the bricks that are the same value
+// and are close enough.
+// Before: some bricks may be close and have the same value.
+// After: no bricks are close and have the same value.
 func (w *World) MergeBricks() {
-	// Keep doing merges until no merges are possible anymore.
 	// I don't expect to ever have more than one merge happen in one frame but
 	// I feel weird hardcoding that assumption when I can just add a loop to
 	// handle that case as well.
