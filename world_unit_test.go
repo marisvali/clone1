@@ -537,9 +537,27 @@ func TestFindMergingBricks(t *testing.T) {
 }
 
 func TestCreateFirstRowsOfBricks(t *testing.T) {
+	RSeed(0)
+	for range 100 {
+		w := NewWorld(0, Level{})
+		w.Bricks = w.Bricks[:0]
 
-	// Are there 2 rows
-	assert.Equal(t, true, true)
+		w.CreateFirstRowsOfBricks()
+
+		// Check that we have 2 rows in the beginning.
+		require.Equal(t, 12, len(w.Bricks))
+
+		// Check that the max val is 5.
+		require.Equal(t, int64(5), w.CurrentMaxVal())
+
+		// Check that no merges are possible.
+		w.TimerDisabled = true
+		for range 200 {
+			w.Step(PlayerInput{})
+			found, _, _ := w.FindMergingBricks()
+			require.False(t, found)
+		}
+	}
 }
 
 func TestCurrentMaxVal(t *testing.T) {
@@ -614,8 +632,12 @@ func TestCreateNewRowOfBricks(t *testing.T) {
 		}
 
 		// Check that no new merges are possible.
-		found, _, _ := w.FindMergingBricks()
-		require.False(t, found)
+		w.TimerDisabled = true
+		for range 200 {
+			w.Step(PlayerInput{})
+			found, _, _ := w.FindMergingBricks()
+			require.False(t, found)
+		}
 	}
 }
 
