@@ -754,7 +754,77 @@ func TestPixelPosToCanonicalPixelPos(t *testing.T) {
 }
 
 func TestGetObstacles(t *testing.T) {
-	assert.Equal(t, true, true)
+	RSeed(0)
+
+	{
+		var w World
+		w.NextBrickId = 1
+		w.Bricks = append(w.Bricks, w.NewBrick(RPos(), 13))
+		buffer := make([]Rectangle, 100)
+		w.GetObstacles(&w.Bricks[0], IncludingTop, &buffer)
+		require.Equal(t, 4, len(buffer))
+	}
+
+	{
+		var w World
+		w.NextBrickId = 1
+		for i := range 10 {
+			w.Bricks = append(w.Bricks, w.NewBrick(RPos(), int64(i+1)))
+		}
+
+		b := w.NewBrick(RPos(), 3)
+
+		// Check that top is included/excluded.
+		buffer1 := make([]Rectangle, 100)
+		w.GetObstacles(&b, IncludingTop, &buffer1)
+		buffer2 := make([]Rectangle, 100)
+		w.GetObstacles(&b, ExceptTop, &buffer2)
+		require.Equal(t, 1, len(buffer1)-len(buffer2))
+
+		// Check that the number of obstacles is correct.
+		require.Equal(t, 10+4-1, len(buffer1))
+	}
+
+	// Check that partners for chained bricks are excluded.
+	for range 10 {
+		var w World
+		w.NextBrickId = 1
+		for i := range 10 {
+			w.Bricks = append(w.Bricks, w.NewBrick(RPos(), int64(i+1)))
+		}
+
+		// Chain two bricks.
+		// Choose one to be the leader.
+		b1 := &w.Bricks[RInt(0, int64(len(w.Bricks)-1))]
+		w.SetBrickPos(b1, RPosLeader())
+
+		// Choose one that will be the follower.
+		var b2 *Brick
+		for {
+			b2 = &w.Bricks[RInt(0, int64(len(w.Bricks)-1))]
+			if b1 != b2 {
+				break
+			}
+		}
+		// Set the position of the follower to be suitable for chaining.
+		b2Pos := b1.PixelPos
+		if RInt(0, 1) == 0 {
+			b2Pos.X += BrickPixelSize + BrickMarginPixelSize
+		} else {
+			b2Pos.Y -= BrickPixelSize + BrickMarginPixelSize
+		}
+		w.SetBrickPos(b2, b2Pos)
+
+		buffer := make([]Rectangle, 100)
+		w.GetObstacles(b1, IncludingTop, &buffer)
+		require.True(t, slices.Contains(buffer, b2.Bounds))
+
+		// Chain bricks.
+		ChainBricks(b1, b2)
+
+		w.GetObstacles(b1, IncludingTop, &buffer)
+		require.False(t, slices.Contains(buffer, b2.Bounds))
+	}
 }
 
 func TestMoveBrick(t *testing.T) {
