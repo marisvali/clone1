@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/stretchr/testify/assert"
 	"math"
+	"slices"
 	"testing"
 )
 
@@ -246,7 +247,99 @@ func TestConvergeTowardsCanonicalPositions(t *testing.T) {
 }
 
 func TestMergeBricks(t *testing.T) {
-	assert.Equal(t, true, true)
+	RSeed(0)
+	{
+		// Find mergeable bricks among many.
+		for range 100 {
+			// Fill the world with bricks.
+			var w World
+			w.NextBrickId = 1
+			for i := 1; i < 30; i++ {
+				b := w.NewBrick(RPos(), int64(i))
+				b.State = BrickState(RInt(0, 2))
+				w.Bricks = append(w.Bricks, b)
+			}
+
+			// Chain some of the bricks.
+			for range RInt(0, 7) {
+				// Choose one to be the leader.
+				var b1 *Brick
+				for {
+					b1 = &w.Bricks[RInt(0, int64(len(w.Bricks)-1))]
+					if b1.ChainedTo == 0 {
+						break
+					}
+				}
+				w.SetBrickPos(b1, RPosLeader())
+
+				// Choose one that will be the follower.
+				var b2 *Brick
+				for {
+					b2 = &w.Bricks[RInt(0, int64(len(w.Bricks)-1))]
+					if b2.ChainedTo == 0 && b1 != b2 {
+						break
+					}
+				}
+				// Set the position of the follower to be suitable for chaining.
+				b2Pos := b1.PixelPos
+				if RInt(0, 1) == 0 {
+					b2Pos.X += BrickPixelSize + BrickMarginPixelSize
+				} else {
+					b2Pos.Y -= BrickPixelSize + BrickMarginPixelSize
+				}
+				w.SetBrickPos(b2, b2Pos)
+
+				// Chain bricks.
+				ChainBricks(b1, b2)
+			}
+
+			alreadyMergeable := []*Brick{}
+			for range RInt(1, 3) {
+				// Choose two different bricks.
+				var b1 *Brick
+				for {
+					b1 = &w.Bricks[RInt(0, int64(len(w.Bricks)-1))]
+					if !slices.Contains(alreadyMergeable, b1) {
+						break
+					}
+				}
+				// Choose one that is different and is not a follower.
+				var b2 *Brick
+				for {
+					b2 = &w.Bricks[RInt(0, int64(len(w.Bricks)-1))]
+					if !slices.Contains(alreadyMergeable, b2) &&
+						b2.State != Follower && b1 != b2 &&
+						b2.Id != b1.ChainedTo {
+						break
+					}
+				}
+
+				// Put b1 at a position that is safe enough to put a chained brick
+				// close to it.
+				w.SetBrickPos(b1, Pt{RInt(100, PlayAreaWidth-320),
+					RInt(200, PlayAreaHeight-200)})
+
+				// Put b2 close to b1.
+				pos1 := b1.PixelPos
+				pos2 := pos1.Plus(Pt{RInt(-25, 25), RInt(-25, 25)})
+				w.SetBrickPos(b2, pos2)
+
+				// Make b2 have the same value as b1.
+				b2.Val = b1.Val
+
+				alreadyMergeable = append(alreadyMergeable, b1)
+				alreadyMergeable = append(alreadyMergeable, b2)
+			}
+
+			foundMerge, _, _ := w.FindMergingBricks()
+			assert.True(t, foundMerge)
+
+			w.MergeBricks()
+
+			foundMerge, _, _ = w.FindMergingBricks()
+			assert.False(t, foundMerge)
+		}
+	}
 }
 
 func TestUnchainBrick(t *testing.T) {
@@ -361,12 +454,12 @@ func TestFindMergingBricks(t *testing.T) {
 		for range 100 {
 			// Fill the world with bricks.
 			var w World
+			w.NextBrickId = 1
 			for i := 1; i < 30; i++ {
 				b := w.NewBrick(RPos(), int64(i))
 				b.State = BrickState(RInt(0, 2))
 				w.Bricks = append(w.Bricks, b)
 			}
-
 			// Chain some of the bricks.
 			for range RInt(0, 7) {
 				// Choose one to be the leader.
@@ -435,9 +528,6 @@ func TestFindMergingBricks(t *testing.T) {
 				}
 			}
 
-			val := RInt(1, 30)
-			w.Bricks = append(w.Bricks, w.NewBrick(pos1, val))
-			w.Bricks = append(w.Bricks, w.NewBrick(pos2, val))
 			foundMerge, i, j := w.FindMergingBricks()
 			assert.Equal(t, true, foundMerge)
 			assert.True(t, i == b1Idx && j == b2Idx || i == b2Idx && j == b1Idx)
