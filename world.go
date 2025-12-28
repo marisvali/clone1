@@ -341,6 +341,7 @@ func (p *PlayerInput) EventOccurred() bool {
 	return p.JustPressed || p.JustReleased || p.TriggerComingUp
 }
 
+// NewWorld creates a world object that is ready for updates.
 func NewWorld(seed int64, l Level) (w World) {
 	// Set constants and buffers.
 	w.NextBrickId = 1
@@ -1122,6 +1123,9 @@ func (w *World) CreateNewRowOfBricks(maxVal int64) {
 	}
 }
 
+// StepComingUp creates a new row of bricks under the existing bricks and moves
+// all existing bricks upwards, for a short time. If a brick goes over the top
+// the game ends. This is the main game-over condition.
 func (w *World) StepComingUp(justEnteredState bool) {
 	if justEnteredState {
 		// We have to compute the speed we need to start with in order to
@@ -1131,7 +1135,7 @@ func (w *World) StepComingUp(justEnteredState bool) {
 		// In order to do this, reverse the problem: if we start with speed 0
 		// and keep increasing the speed, what speed to we reach by the time we
 		// cover the distance?
-		totalDist := int64(BrickPixelSize + BrickMarginPixelSize)
+		totalDist := BrickPixelSize + BrickMarginPixelSize
 		distSoFar := int64(0)
 		speed := int64(0)
 		acc := w.ComingUpDeceleration

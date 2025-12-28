@@ -134,7 +134,15 @@ func TestEventOccurred(t *testing.T) {
 }
 
 func TestNewWorld(t *testing.T) {
-	assert.Equal(t, true, true)
+	for range 10 {
+		w := NewWorld(RInt(0, 10000), Level{})
+		require.Equal(t, 12, len(w.Bricks))
+		for range 3000 {
+			require.NotPanics(t, func() {
+				w.Step(PlayerInput{})
+			})
+		}
+	}
 }
 
 func TestGetBrick(t *testing.T) {
@@ -178,7 +186,15 @@ func TestChainBricks(t *testing.T) {
 }
 
 func TestNewWorldFromPlaythrough(t *testing.T) {
-	assert.Equal(t, true, true)
+	p := Playthrough{}
+	p.SimulationVersion = 25
+	require.Panics(t, func() {
+		NewWorldFromPlaythrough(p)
+	})
+	p.SimulationVersion = SimulationVersion
+	require.NotPanics(t, func() {
+		NewWorldFromPlaythrough(p)
+	})
 }
 
 func TestResetTimerCooldown(t *testing.T) {
@@ -642,8 +658,51 @@ func TestCreateNewRowOfBricks(t *testing.T) {
 }
 
 func TestStepComingUp(t *testing.T) {
-	// 5
-	assert.Equal(t, true, true)
+	// Check that it creates a new row of bricks.
+	{
+		w := NewWorld(0, Level{})
+		for range 300 {
+			// Let the first bricks finish moving up.
+			w.Step(PlayerInput{})
+		}
+		prevLen := len(w.Bricks)
+		w.State = ComingUp
+		w.StepComingUp(true)
+		require.Equal(t, prevLen+6, len(w.Bricks))
+	}
+
+	// Check that it moves bricks up.
+	{
+		w := NewWorld(0, Level{})
+		for range 300 {
+			// Let the first bricks finish moving up.
+			w.Step(PlayerInput{})
+		}
+		w.State = ComingUp
+		w.StepComingUp(true)
+
+		var prevPositions []Pt
+		for _, b := range w.Bricks {
+			prevPositions = append(prevPositions, b.PixelPos)
+		}
+		for range 1000 {
+			w.StepComingUp(false)
+			var currentPositions []Pt
+			for _, b := range w.Bricks {
+				currentPositions = append(currentPositions, b.PixelPos)
+			}
+			for i := range currentPositions {
+				require.Equal(t, currentPositions[i].X, prevPositions[i].X)
+				require.Less(t, currentPositions[i].Y, prevPositions[i].Y)
+			}
+
+			// Check that it ends the movement and switches to Regular state.
+			if w.State == Regular {
+				break
+			}
+		}
+		require.Equal(t, Regular, w.State)
+	}
 }
 
 func TestPixelPosToCanonicalPos(t *testing.T) {
