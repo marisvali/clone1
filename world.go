@@ -1017,6 +1017,9 @@ func (w *World) CurrentMaxVal() int64 {
 	return currentMaxVal
 }
 
+// CreateNewRowOfBricks adds a new row of bricks underneath the existing bricks.
+// It will not cause any automatic merges.
+// It will generate chains based on the current maxVal.
 func (w *World) CreateNewRowOfBricks(maxVal int64) {
 	type BrickPair struct {
 		b1 *Brick

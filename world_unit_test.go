@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math"
 	"slices"
 	"testing"
@@ -564,11 +565,58 @@ func TestCurrentMaxVal(t *testing.T) {
 }
 
 func TestCreateNewRowOfBricks(t *testing.T) {
-	// 5
-	// This actually deserves a bunch of tests.
-	// var w World
-	// w.CreateNewRowOfBricks()
-	assert.Equal(t, true, true)
+	RSeed(0)
+
+	for range 100 {
+		l := Level{}
+		for y := range RInt(1, 4) {
+			for x := range int64(6) {
+				if RInt(0, 10) == 0 {
+					continue
+				}
+				var bp BrickParams
+				bp.Val = y*6 + x + 1
+				bp.Pos = CanonicalPosToPixelPos(Pt{x, y})
+				l.BricksParams = append(l.BricksParams, bp)
+			}
+		}
+		w := NewWorld(RInt(0, 10000), l)
+		found1, _, _ := w.FindMergingBricks()
+		require.False(t, found1)
+
+		prevLen := len(w.Bricks)
+		maxVal := int64(20)
+		w.CreateNewRowOfBricks(maxVal)
+
+		// Check the correct number of new bricks was added.
+		require.Equal(t, prevLen+6, len(w.Bricks))
+
+		// Check that their value is less than maxVal.
+		for i := prevLen; i < len(w.Bricks); i++ {
+			require.GreaterOrEqual(t, maxVal, w.Bricks[i].Val)
+			require.Equal(t, int64(-1), w.Bricks[i].CanonicalPos.Y)
+		}
+
+		// Count chains.
+		nChains := 0
+		for i := prevLen; i < len(w.Bricks); i++ {
+			if w.Bricks[i].ChainedTo != 0 {
+				nChains++
+			}
+		}
+		currentMaxVal := w.CurrentMaxVal()
+		if currentMaxVal < 10 {
+			require.Equal(t, nChains, 0)
+		} else if currentMaxVal < 21 {
+			require.GreaterOrEqual(t, nChains, 1)
+		} else {
+			require.GreaterOrEqual(t, nChains, 2)
+		}
+
+		// Check that no new merges are possible.
+		found, _, _ := w.FindMergingBricks()
+		require.False(t, found)
+	}
 }
 
 func TestStepComingUp(t *testing.T) {
