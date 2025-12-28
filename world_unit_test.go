@@ -828,9 +828,115 @@ func TestGetObstacles(t *testing.T) {
 }
 
 func TestMoveBrick(t *testing.T) {
-	assert.Equal(t, true, true)
+	// Check for a simple brick.
+	{
+		var w World
+		w.NextBrickId = 1
+
+		var pos1 Pt
+		pos1.X = RInt(0, (PlayAreaWidth-BrickPixelSize)/2)
+		pos1.Y = RInt(0, PlayAreaHeight-BrickPixelSize)
+		w.Bricks = append(w.Bricks, w.NewBrick(pos1, 3))
+
+		dif := int64(137)
+		pos2 := pos1.Plus(Pt{BrickPixelSize + dif, 0})
+		w.Bricks = append(w.Bricks, w.NewBrick(pos2, 4))
+
+		// Move through the obstacle.
+		targetPos := pos1.Plus(Pt{1000, 0})
+		nMaxPixels := int64(300)
+		hitObstacle := w.MoveBrick(&w.Bricks[0], targetPos, nMaxPixels,
+			IgnoreObstacles)
+		require.False(t, hitObstacle)
+
+		// Stop at the obstacle.
+		w.SetBrickPos(&w.Bricks[0], pos1)
+		targetPos = pos1.Plus(Pt{1000, 0})
+		nMaxPixels = int64(1000)
+		hitObstacle = w.MoveBrick(&w.Bricks[0], targetPos, nMaxPixels,
+			StopAtFirstObstacleExceptTop)
+		require.True(t, hitObstacle)
+		expectedPos := pos2.Minus(Pt{BrickPixelSize, 0})
+		require.Equal(t, expectedPos, w.Bricks[0].PixelPos)
+	}
+
+	// Check for a chained brick.
+	{
+		var w World
+		w.NextBrickId = 1
+
+		var pos1 Pt
+		pos1.X = RInt(0, (PlayAreaWidth-BrickPixelSize)/2)
+		pos1.Y = RInt(0, PlayAreaHeight-BrickPixelSize)
+		w.Bricks = append(w.Bricks, w.NewBrick(pos1, 3))
+
+		pos2 := pos1.Plus(Pt{BrickPixelSize + BrickMarginPixelSize, 0})
+		w.Bricks = append(w.Bricks, w.NewBrick(pos2, 4))
+		ChainBricks(&w.Bricks[0], &w.Bricks[1])
+
+		dif := int64(137)
+		pos3 := pos1.Plus(Pt{2*BrickPixelSize + BrickMarginPixelSize + dif, 0})
+		w.Bricks = append(w.Bricks, w.NewBrick(pos3, 4))
+
+		// Stop at the obstacle.
+		targetPos := pos1.Plus(Pt{1000, 0})
+		nMaxPixels := int64(1000)
+		hitObstacle := w.MoveBrick(&w.Bricks[0], targetPos, nMaxPixels,
+			StopAtFirstObstacleExceptTop)
+		require.True(t, hitObstacle)
+		expectedPos := pos3.Minus(Pt{2*BrickPixelSize + BrickMarginPixelSize, 0})
+		require.Equal(t, expectedPos, w.Bricks[0].PixelPos)
+	}
 }
 
 func TestMoveBrickHelper(t *testing.T) {
-	assert.Equal(t, true, true)
+	// Check for a simple brick.
+	{
+		var w World
+		w.NextBrickId = 1
+
+		var pos1 Pt
+		pos1.X = RInt(0, (PlayAreaWidth-BrickPixelSize)/2)
+		pos1.Y = RInt(0, PlayAreaHeight-BrickPixelSize)
+		w.Bricks = append(w.Bricks, w.NewBrick(pos1, 3))
+
+		dif := int64(137)
+		pos2 := pos1.Plus(Pt{BrickPixelSize + dif, 0})
+		w.Bricks = append(w.Bricks, w.NewBrick(pos2, 4))
+
+		targetPos := pos1.Plus(Pt{1000, 0})
+		nMaxPixels := int64(1000)
+		nPixelsLeft := w.MoveBrickHelper(&w.Bricks[0], targetPos, nMaxPixels,
+			IncludingTop)
+		require.Equal(t, dif, nMaxPixels-nPixelsLeft)
+		expectedPos := pos2.Minus(Pt{BrickPixelSize, 0})
+		require.Equal(t, expectedPos, w.Bricks[0].PixelPos)
+	}
+
+	// Check for a chained brick.
+	{
+		var w World
+		w.NextBrickId = 1
+
+		var pos1 Pt
+		pos1.X = RInt(0, (PlayAreaWidth-BrickPixelSize)/2)
+		pos1.Y = RInt(0, PlayAreaHeight-BrickPixelSize)
+		w.Bricks = append(w.Bricks, w.NewBrick(pos1, 3))
+
+		pos2 := pos1.Plus(Pt{BrickPixelSize + BrickMarginPixelSize, 0})
+		w.Bricks = append(w.Bricks, w.NewBrick(pos2, 4))
+		ChainBricks(&w.Bricks[0], &w.Bricks[1])
+
+		dif := int64(137)
+		pos3 := pos1.Plus(Pt{2*BrickPixelSize + BrickMarginPixelSize + dif, 0})
+		w.Bricks = append(w.Bricks, w.NewBrick(pos3, 5))
+
+		targetPos := pos1.Plus(Pt{1000, 0})
+		nMaxPixels := int64(1000)
+		nPixelsLeft := w.MoveBrickHelper(&w.Bricks[0], targetPos, nMaxPixels,
+			IncludingTop)
+		require.Equal(t, dif, nMaxPixels-nPixelsLeft)
+		expectedPos := pos3.Minus(Pt{2*BrickPixelSize + BrickMarginPixelSize, 0})
+		require.Equal(t, expectedPos, w.Bricks[0].PixelPos)
+	}
 }
