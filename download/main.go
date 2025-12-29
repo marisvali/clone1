@@ -49,17 +49,16 @@ func DownloadRecordings() {
 			// dealing with a playthrough recorded before splitting the version
 			// into release, simulation and input versions.
 			// Use the old extension system (e.g. .clone1016).
-			filename = fmt.Sprintf("%s/%d%02d%02d-%02d%02d%02d.clone1%03d", dir,
-				m.Year(), m.Month(), m.Day(), m.Hour(), m.Minute(), m.Second(),
-				dbRows[i].releaseVersion)
+			filename = fmt.Sprintf("%s/%d%02d%02d-%02d%02d%02d.clone1-%03d",
+				dir, m.Year(), m.Month(), m.Day(), m.Hour(), m.Minute(),
+				m.Second(), dbRows[i].releaseVersion)
 		} else {
 			// Use the extension system that includes both simulation and
-			// input versions: .clone1019-012
-			// filename = fmt.Sprintf("%s/%d%02d%02d-%02d%02d%02d.clone1%03d-%03d", dir,
-			// 	m.Year(), m.Month(), m.Day(), m.Hour(), m.Minute(), m.Second(),
-			// 	dbRows[i].simulationVersion, dbRows[i].inputVersion)
-			filename = fmt.Sprintf("%s/%d%02d%02d-%02d%02d%02d.clone1", dir,
-				m.Year(), m.Month(), m.Day(), m.Hour(), m.Minute(), m.Second())
+			// input versions: .clone1-019-012
+			filename = fmt.Sprintf(
+				"%s/%d%02d%02d-%02d%02d%02d.clone1-%d-%d", dir, m.Year(),
+				m.Month(), m.Day(), m.Hour(), m.Minute(), m.Second(),
+				dbRows[i].simulationVersion, dbRows[i].inputVersion)
 		}
 		WriteFile(filename, dbRows[i].data)
 	}
