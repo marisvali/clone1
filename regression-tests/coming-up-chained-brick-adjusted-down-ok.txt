@@ -1,0 +1,9 @@
+Setup
+-----
+
+The player drags a vertically chained brick at the top of the screen, with space underneath, and holds it there while the "coming up" event is triggered.
+
+Test
+----
+
+The vertically chained brick is correctly moved down as a unit, instead of moving down only the top brick.

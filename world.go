@@ -25,7 +25,7 @@ import (
 // regression tests. If the SimulationVersion doesn't change, a playthrough
 // that was recorded with the same SimulationVersion can be made to be replayed
 // with the current simulation code, even if everything else changed.
-const SimulationVersion = 999
+const SimulationVersion = 1
 
 // World coordinates
 // -----------------
@@ -1233,6 +1233,9 @@ func (w *World) StepComingUp(justEnteredState bool) {
 			// dragged bricks and bricks who were recently dragged and now are
 			// in the middle of adjusting their position, because only those
 			// bricks will have space to be moved down.
+			if b.State == Follower {
+				b = w.GetBrick(b.ChainedTo)
+			}
 			hitObstacle := w.MoveBrick(b, b.PixelPos.Plus(Pt{0, 1000}),
 				top-brickTop, StopAtFirstObstacleExceptTop)
 

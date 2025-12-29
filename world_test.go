@@ -132,6 +132,8 @@ func BenchmarkAveragePlaythrough(b *testing.B) {
 }
 
 func TestWorld_CreateNewRowOfBricks(t *testing.T) {
+	// Test that some merges are possible after the new row is created, and we
+	// will not get the effect of two rows coming up in quick succession.
 	RSeed(0)
 	for range 10000 {
 		var l Level

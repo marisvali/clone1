@@ -1,0 +1,9 @@
+Setup
+-----
+
+There is a vertically chained brick at the top of a 6-brick column. The "coming up" event is triggered.
+
+Test
+----
+
+The vertically chained brick cannot be moved down successfully and the game is over.
