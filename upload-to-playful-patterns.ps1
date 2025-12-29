@@ -1,6 +1,6 @@
 $Env:GOOS = 'js'
 $Env:GOARCH = 'wasm'
-go build -tags assert_disabled,http_enabled -o clone1.wasm clone1
+go build -tags assert_disabled,http_enabled -o clone1.wasm github.com/marisvali/clone1
 Remove-Item Env:GOOS
 Remove-Item Env:GOARCH
 
