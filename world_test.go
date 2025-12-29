@@ -109,6 +109,16 @@ func TestWorld_ConvertRegressionTests(t *testing.T) {
 // after implementing a more rigorous filter for obstacles (with laptop plugged
 // in, remember to unplug after battery recharges an rerun this measurement)
 // BenchmarkAveragePlaythrough-12    	    1514	   7647922 ns/op
+//
+// Chained bricks were added and now the average playthrough has 21548 frames.
+// The benchmark now, after adding chained bricks, before refactoring for
+// performance:
+// BenchmarkAveragePlaythrough-12    	     272	  43825387 ns/op
+// After using a pre-allocated buffer in NoMoreMergesArePossible instead of
+// allocating every time:
+// BenchmarkAveragePlaythrough-12    	     434	  27863379 ns/op
+// After disabling asserts for benchmark, as they are not relevant:
+// BenchmarkAveragePlaythrough-12    	     447	  26703435 ns/op
 func BenchmarkAveragePlaythrough(b *testing.B) {
 	playthrough := DeserializePlaythrough(ReadFile("regression-tests/average-playthrough.clone1"))
 	println(len(playthrough.History))

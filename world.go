@@ -328,6 +328,7 @@ type World struct {
 	JustMergedBricks         []*Brick
 	SlotsBuffer              Mat
 	AllowOverlappingDrags    bool
+	GroupsBuffer             [31][]*Brick
 }
 
 type PlayerInput struct {
@@ -358,6 +359,9 @@ func NewWorld(seed int64, l Level) (w World) {
 	}
 	w.SlotsBuffer = NewMat(Pt{NCols, NRows})
 	w.Bricks = make([]Brick, 0, NCols*(NRows+1))
+	for i := range w.GroupsBuffer {
+		w.GroupsBuffer[i] = make([]*Brick, 0, NCols*(NRows+1))
+	}
 
 	// Initialize the world from level parameters.
 	w.Seed = seed
@@ -586,7 +590,10 @@ func (w *World) StepRegular(justEnteredState bool, input PlayerInput) {
 
 func (w *World) NoMoreMergesArePossible() bool {
 	// Group bricks by their value.
-	groups := map[int64][]*Brick{}
+	groups := w.GroupsBuffer
+	for i := range groups {
+		groups[i] = groups[i][:0]
+	}
 	for i := range w.Bricks {
 		b := &w.Bricks[i]
 		groups[b.Val] = append(groups[b.Val], b)
