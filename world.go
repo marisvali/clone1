@@ -1058,6 +1058,25 @@ func (w *World) CreateNewRowOfBricks(maxVal int64) {
 
 		w.Bricks = append(w.Bricks, w.NewBrick(newPos, val))
 
+		if x == NCols-1 && w.NoMoreMergesArePossible() {
+			// We just added a new row, but no merges are possible, which means
+			// a new row will appear right after this one. That can be
+			// surprising and unfair to the player. So if we are at the last
+			// brick in the row and no merges are possible, change the value of
+			// this brick so that it makes a merge possible. Don't chain the
+			// brick afterwards, to make sure that the player can somehow move
+			// this brick on top of the other one with the same value.
+			for _, b := range w.Bricks {
+				// There must be at least one brick with a value different from
+				// the forbidden value, we have 5 other bricks in the new row,
+				// they can't all have the forbiddenValue but also not allow
+				// any merges.
+				if b.Val != forbiddenValue {
+					val = b.Val
+				}
+			}
+		}
+
 		if brickAbove != nil &&
 			brickAbove.State == Canonical &&
 			brickAbove.ChainedTo == 0 {
