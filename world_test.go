@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
 )
@@ -127,5 +128,30 @@ func BenchmarkAveragePlaythrough(b *testing.B) {
 		for i := range len(playthrough.History) {
 			world.Step(playthrough.History[i])
 		}
+	}
+}
+
+func TestWorld_CreateNewRowOfBricks(t *testing.T) {
+	RSeed(0)
+	for range 10000 {
+		var l Level
+		l.BricksParams = append(l.BricksParams, BrickParams{
+			Pos: CanonicalPosToPixelPos(Pt{5, 0}),
+			Val: 29,
+		})
+		w := NewWorld(RInt(0, 10000), l)
+		for {
+			w.Step(PlayerInput{})
+			if w.State == ComingUp {
+				break
+			}
+		}
+		for {
+			w.Step(PlayerInput{})
+			if w.State == Regular {
+				break
+			}
+		}
+		require.False(t, w.NoMoreMergesArePossible())
 	}
 }
