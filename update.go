@@ -126,7 +126,7 @@ func (g *Gui) UpdatePlayScreen() {
 		if g.RecordToFile {
 			WriteFile(g.RecordingFile, g.playthrough.Serialize())
 		}
-		if g.frameIdx%60 == 0 {
+		if g.frameIdx%600 == 0 {
 			g.uploadCurrentWorld()
 		}
 
