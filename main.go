@@ -115,6 +115,8 @@ type Gui struct {
 	uploadDataChannel     chan uploadData
 	panicHappened         bool
 	panicMsg              string
+	uploadLogChannel      chan logData
+	lastFrameTime         time.Time
 }
 
 type uploadData struct {
@@ -137,10 +139,21 @@ type Config struct {
 	AllowOverlappingDrags bool   `yaml:"AllowOverlappingDrags"`
 	DisplayFPS            bool   `yaml:"DisplayFPS"`
 	UploadPlaybackToHttp  bool   `yaml:"UploadPlaybackToHttp"`
+	LogNonErrors          bool   `yaml:"LogNonErrors"`
 }
 
 type UserData struct {
 	BestScore int64 `yaml:"BestScore"`
+}
+
+type logData struct {
+	user              string
+	releaseVersion    int64
+	simulationVersion int64
+	inputVersion      int64
+	playthroughId     uuid.UUID
+	level             string
+	message           string
 }
 
 type PointerState struct {
@@ -208,6 +221,9 @@ func main() {
 		go g.UploadPlaythroughs(g.uploadDataChannel)
 	}
 	g.UserData = LoadUserData(g.username)
+
+	g.uploadLogChannel = make(chan logData, 1000)
+	go g.UploadLogs(g.uploadLogChannel)
 
 	if filePassedForPlayback {
 		g.StartState = "Playback"

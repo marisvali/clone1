@@ -5,6 +5,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/text"
 	"image/color"
+	"time"
 )
 
 func (g *Gui) Draw(screen *ebiten.Image) {
@@ -62,6 +63,14 @@ func (g *Gui) Draw(screen *ebiten.Image) {
 		g.DrawDebugControlsHorizontal(SubImage(screen, g.horizontalDebugArea))
 		g.DrawDebugControlsVertical(SubImage(screen, g.verticalDebugArea))
 	}
+
+	currentFrameTime := time.Now()
+	currentFrameDuration := currentFrameTime.Sub(g.lastFrameTime)
+	if g.frameIdx > 1 && currentFrameDuration.Milliseconds() > 20 {
+		g.Log("debug", fmt.Sprintf("frameIdx: %d duration (sec): %f",
+			g.frameIdx, currentFrameDuration.Seconds()))
+	}
+	g.lastFrameTime = currentFrameTime
 }
 
 func (g *Gui) DrawHomeScreen(screen *ebiten.Image) {

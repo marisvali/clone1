@@ -6,3 +6,4 @@ RecordToFileOnError: false
 RecordingFile: ""
 DisplayFPS: false
 UploadPlaybackToHttp: true
+LogNonErrors: true

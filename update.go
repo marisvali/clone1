@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/goccy/go-yaml"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -28,6 +29,10 @@ func (g *Gui) Update() error {
 	}
 
 	g.pointer = g.GetPointerState()
+	if g.pointer.JustPressed {
+		g.Log("info", fmt.Sprintf("JustPressed. frameIdx: %d", g.frameIdx))
+	}
+
 	g.pressedKeys = g.pressedKeys[:0]
 	g.pressedKeys = inpututil.AppendPressedKeys(g.pressedKeys)
 	g.justPressedKeys = g.justPressedKeys[:0]
@@ -435,6 +440,54 @@ func (g *Gui) UploadUserData(username string, ch chan UserData) {
 			// should not be interrupted by this function failing. If it does
 			// fail, just try a couple more times, then give up.
 			err = SetUserDataHttp(username, string(bytes))
+			if err == nil {
+				break
+			}
+		}
+	}
+}
+
+func (g *Gui) Log(level string, message string) {
+	if !g.LogNonErrors {
+		return
+	}
+
+	// Don't block if the channel is already full.
+	if len(g.uploadLogChannel) < cap(g.uploadLogChannel) {
+		g.uploadLogChannel <- logData{
+			g.username,
+			g.playthrough.ReleaseVersion,
+			g.playthrough.SimulationVersion,
+			g.playthrough.InputVersion,
+			g.playthrough.Id,
+			level,
+			message}
+	}
+}
+
+func (g *Gui) UploadLogs(ch chan logData) {
+	defer g.HandlePanic()
+
+	for {
+		// Receive a struct from the channel.
+		// Blocks until a struct is received.
+		log := <-ch
+
+		// Upload the data.
+		for i := 1; i < 3; i++ {
+			// This might fail, but we really do not care that much. The game
+			// should not be interrupted by this function failing. If it does
+			// fail, just try a couple more times, then give up.
+			err := LogHttp(
+				log.user,
+				log.releaseVersion,
+				log.simulationVersion,
+				log.inputVersion,
+				log.playthroughId,
+				log.level,
+				log.message,
+				nil)
+
 			if err == nil {
 				break
 			}
