@@ -5,11 +5,11 @@ $password = "comeonthough";
 $dbname = "playfulp_clone1";
 
 function LogInfo($message) {
-	// file_put_contents("./log-error-clone1.log", "INFO: " . $message . "\n", FILE_APPEND);
+	// file_put_contents("./log-clone1.log", "INFO: " . $message . "\n", FILE_APPEND);
 }
 
 function LogError($message) {
-	file_put_contents("./log-error-clone1.log", "ERROR: " . $message . "\n", FILE_APPEND);
+	file_put_contents("./log-clone1.log", "ERROR: " . $message . "\n", FILE_APPEND);
     http_response_code(513);
 	die();
 }
@@ -29,14 +29,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $simulation_version = $_POST['simulation_version'];
         $input_version = $_POST['input_version'];
         $id = $_POST['id'];
-        $error = $_POST['error'];
+        $level = $_POST['level'];
+        $message = $_POST['message'];
         $file = $_FILES['playthrough'];
         $fileName = $file['name'];
         $fileTmpPath = $file['tmp_name'];
         $fileContent = mysqli_real_escape_string($conn, file_get_contents($fileTmpPath));
 
-        $sql = "INSERT INTO errors(moment, user, release_version, simulation_version, input_version, id, error, playthrough) " .
-                            "VALUES (now(), '$user', '$release_version', '$simulation_version', '$input_version', '$id', '$error', '$fileContent')";
+        $sql = "INSERT INTO logs(moment, user, release_version, simulation_version, input_version, id, level, message, playthrough) " .
+                            "VALUES (now(), '$user', '$release_version', '$simulation_version', '$input_version', '$id', '$level', '$message', '$fileContent')";
         try {
             $conn->query($sql);
             LogInfo("INSERT successful!");

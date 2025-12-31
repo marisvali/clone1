@@ -105,14 +105,15 @@ func GetUserDataHttp(user string) (string, error) {
 		map[string][]byte{})
 }
 
-func LogErrorHttp(user string,
+func LogHttp(user string,
 	releaseVersion int64,
 	simulationVersion int64,
 	inputVersion int64,
 	id uuid.UUID,
-	errorMsg string,
+	level string,
+	message string,
 	data []byte) error {
-	url := "https://playful-patterns.com/log-error-clone1.php"
+	url := "https://playful-patterns.com/log-clone1.php"
 	_, err := makeHttpRequest(url,
 		map[string]string{
 			"user":               user,
@@ -120,7 +121,8 @@ func LogErrorHttp(user string,
 			"simulation_version": strconv.FormatInt(simulationVersion, 10),
 			"input_version":      strconv.FormatInt(inputVersion, 10),
 			"id":                 id.String(),
-			"error":              errorMsg,
+			"level":              level,
+			"message":            message,
 		},
 		map[string][]byte{"playthrough": data})
 	return err

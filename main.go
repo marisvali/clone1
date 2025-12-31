@@ -339,12 +339,13 @@ func (g *Gui) HandlePanic() {
 	// for errors that happen in the browser, from WASM).
 	// Ignore errors, because if this fails and we are in WASM there is nothing
 	// more we can do anyway to handle the error.
-	_ = LogErrorHttp(
+	_ = LogHttp(
 		g.username,
 		g.playthrough.ReleaseVersion,
 		g.playthrough.SimulationVersion,
 		g.playthrough.InputVersion,
 		g.playthrough.Id,
+		"error",
 		errorMsg,
 		g.playthrough.Serialize())
 
