@@ -136,6 +136,7 @@ type Config struct {
 	TestFile              string `yaml:"TestFile"`
 	AllowOverlappingDrags bool   `yaml:"AllowOverlappingDrags"`
 	DisplayFPS            bool   `yaml:"DisplayFPS"`
+	UploadPlaybackToHttp  bool   `yaml:"UploadPlaybackToHttp"`
 }
 
 type UserData struct {
@@ -165,15 +166,9 @@ func main() {
 	g.playthrough.ReleaseVersion = ReleaseVersion
 
 	g.username = getUsername()
-	// A channel size of 10 means the channel will buffer 10 inputs before it is
-	// full and it blocks. Hopefully, when uploading data, a size of 10 is
-	// sufficient.
-	g.uploadDataChannel = make(chan uploadData, 10)
-	go g.UploadPlaythroughs(g.uploadDataChannel)
-	g.UserData = LoadUserData(g.username)
-	// A channel size of 10 means the channel will buffer 10 inputs before it is
-	// full and it blocks. Hopefully, when uploading data, a size of 10 is
-	// sufficient.
+	// A channel size of 10 means the channel will buffer 10 inputs before
+	// it is full. Hopefully, this is enough to compensate for most hitches in
+	// uploads.
 	g.uploadUserDataChannel = make(chan UserData, 10)
 	go g.UploadUserData(g.username, g.uploadUserDataChannel)
 	g.FrameSkipAltArrow = 1
@@ -204,6 +199,15 @@ func main() {
 	}
 
 	g.LoadGuiData()
+
+	if g.UploadPlaybackToHttp {
+		// A channel size of 10 means the channel will buffer 10 inputs before
+		// it is full. Hopefully, this is enough to compensate for most hitches
+		// in uploads.
+		g.uploadDataChannel = make(chan uploadData, 10)
+		go g.UploadPlaythroughs(g.uploadDataChannel)
+	}
+	g.UserData = LoadUserData(g.username)
 
 	if filePassedForPlayback {
 		g.StartState = "Playback"
@@ -261,17 +265,19 @@ func (g *Gui) InitializeWorldToNewGame() {
 	g.playthrough.Seed = time.Now().UnixNano()
 	g.playthrough.History = g.playthrough.History[:0]
 	g.playthrough.AllowOverlappingDrags = g.AllowOverlappingDrags
-	for i := 1; i < 3; i++ {
-		// This might fail, but we really do not care that much. The game should
-		// not be interrupted by this function failing. If it does fail, just
-		// try a couple more times, then give up.
-		err := InitializeIdInDbHttp(g.username,
-			g.playthrough.ReleaseVersion,
-			g.playthrough.SimulationVersion,
-			g.playthrough.InputVersion,
-			g.playthrough.Id)
-		if err == nil {
-			break
+	if g.UploadPlaybackToHttp {
+		for i := 1; i < 3; i++ {
+			// This might fail, but we really do not care that much. The game
+			// should not be interrupted by this function failing. If it does
+			// fail, just try a couple more times, then give up.
+			err := InitializeIdInDbHttp(g.username,
+				g.playthrough.ReleaseVersion,
+				g.playthrough.SimulationVersion,
+				g.playthrough.InputVersion,
+				g.playthrough.Id)
+			if err == nil {
+				break
+			}
 		}
 	}
 	g.world = NewWorldFromPlaythrough(g.playthrough)
@@ -283,17 +289,19 @@ func (g *Gui) ResetWorld() {
 	g.playthrough.Id = uuid.New()
 	g.playthrough.History = g.playthrough.History[:0]
 	g.playthrough.AllowOverlappingDrags = g.AllowOverlappingDrags
-	for i := 1; i < 3; i++ {
-		// This might fail, but we really do not care that much. The game should
-		// not be interrupted by this function failing. If it does fail, just
-		// try a couple more times, then give up.
-		err := InitializeIdInDbHttp(g.username,
-			g.playthrough.ReleaseVersion,
-			g.playthrough.SimulationVersion,
-			g.playthrough.InputVersion,
-			g.playthrough.Id)
-		if err == nil {
-			break
+	if g.UploadPlaybackToHttp {
+		for i := 1; i < 3; i++ {
+			// This might fail, but we really do not care that much. The game
+			// should not be interrupted by this function failing. If it does
+			// fail, just try a couple more times, then give up.
+			err := InitializeIdInDbHttp(g.username,
+				g.playthrough.ReleaseVersion,
+				g.playthrough.SimulationVersion,
+				g.playthrough.InputVersion,
+				g.playthrough.Id)
+			if err == nil {
+				break
+			}
 		}
 	}
 	g.world = NewWorldFromPlaythrough(g.playthrough)
@@ -349,19 +357,21 @@ func (g *Gui) HandlePanic() {
 }
 
 func (g *Gui) uploadCurrentWorld() {
+	if !g.UploadPlaybackToHttp {
+		return
+	}
+
 	// Pass a clone to the channel and not a serialized playthrough.
 	// Serialization takes much longer than cloning.
-	// Also, it is important for the channel to have some buffer, otherwise this
-	// call will block until the previous world instance was uploaded.
-	// If the connection to the server drops for a few seconds, either due to
-	// the player's connection or the server not being available, it will
-	// interrupt the gameplay.
-	g.uploadDataChannel <- uploadData{
-		g.username,
-		g.playthrough.ReleaseVersion,
-		g.playthrough.SimulationVersion,
-		g.playthrough.InputVersion,
-		g.playthrough.Clone()}
+	// Don't block if the channel is already full.
+	if len(g.uploadDataChannel) < cap(g.uploadDataChannel) {
+		g.uploadDataChannel <- uploadData{
+			g.username,
+			g.playthrough.ReleaseVersion,
+			g.playthrough.SimulationVersion,
+			g.playthrough.InputVersion,
+			g.playthrough.Clone()}
+	}
 }
 
 func (g *Gui) UploadPlaythroughs(ch chan uploadData) {

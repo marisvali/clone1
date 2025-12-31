@@ -115,8 +115,11 @@ func (g *Gui) UpdatePlayScreen() {
 		}
 	}
 	if g.frameIdx%g.SlowdownFactor == 0 {
-		// Save the input in the playthrough.
-		g.playthrough.History = append(g.playthrough.History, g.accumulatedInput)
+		if g.RecordToFile || g.UploadPlaybackToHttp {
+			// Save the input in the playthrough.
+			g.playthrough.History = append(g.playthrough.History, g.accumulatedInput)
+		}
+
 		// IMPORTANT: save the playthrough before stepping the World. If
 		// a bug in the World causes it to crash, we want to save the input
 		// that caused the bug before the program crashes.
@@ -134,7 +137,10 @@ func (g *Gui) UpdatePlayScreen() {
 		// Save best score if it got increased.
 		if g.world.Score > g.BestScore {
 			g.BestScore = g.world.Score
-			g.uploadUserDataChannel <- g.UserData
+			// Only upload if you don't risk blocking.
+			if len(g.uploadUserDataChannel) < cap(g.uploadUserDataChannel) {
+				g.uploadUserDataChannel <- g.UserData
+			}
 		}
 
 		g.accumulatedInput = PlayerInput{}
@@ -405,10 +411,21 @@ func LoadUserData(username string) (data UserData) {
 }
 
 func (g *Gui) UploadUserData(username string, ch chan UserData) {
+	defer g.HandlePanic()
+
 	for {
 		// Receive a struct from the channel.
 		// Blocks until a struct is received.
-		data := <-ch
+		var data UserData
+		for {
+			data = <-ch
+			// If there are multiple values available in the channel, keep
+			// getting them until the last value is retrieved. There's no point
+			// in uploading intermediate values, just upload the latest value.
+			if len(ch) == 0 {
+				break
+			}
+		}
 
 		// Upload the data.
 		bytes, err := yaml.Marshal(data)

@@ -5,3 +5,4 @@ RecordToFile: false
 RecordToFileOnError: false
 RecordingFile: ""
 DisplayFPS: false
+UploadPlaybackToHttp: false
