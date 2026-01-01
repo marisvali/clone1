@@ -11,7 +11,7 @@
 
     const go = new Go();
     window.username = "mihaela";
-    WebAssembly.instantiateStreaming(fetch("https://playful-patterns.com/clone1.wasm"), go.importObject).then(result => {
+    WebAssembly.instantiateStreaming(fetch("https://playful-patterns.com/clone1-01-01-01.wasm"), go.importObject).then(result => {
         go.run(result.instance);
     });
 </script>

@@ -56,7 +56,7 @@ func DownloadRecordings() {
 			// Use the extension system that includes both simulation and
 			// input versions: .clone1-019-012
 			filename = fmt.Sprintf(
-				"%s/%d%02d%02d-%02d%02d%02d.clone1-%d-%d", dir, m.Year(),
+				"%s/%d%02d%02d-%02d%02d%02d.clone1-%02d-%02d", dir, m.Year(),
 				m.Month(), m.Day(), m.Hour(), m.Minute(), m.Second(),
 				dbRows[i].simulationVersion, dbRows[i].inputVersion)
 		}
