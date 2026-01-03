@@ -25,7 +25,7 @@ import (
 // regression tests. If the SimulationVersion doesn't change, a playthrough
 // that was recorded with the same SimulationVersion can be made to be replayed
 // with the current simulation code, even if everything else changed.
-const SimulationVersion = 1
+const SimulationVersion = 99
 
 // World coordinates
 // -----------------

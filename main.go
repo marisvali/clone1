@@ -42,7 +42,7 @@ import (
 // - Currently the executables are small enough and I need few enough variations
 // that I can easily afford to generate an entire game release for each
 // variation (35mb for a Windows .exe and 25mb for a .wasm).
-const ReleaseVersion = 1
+const ReleaseVersion = 99
 
 //go:embed data/*
 var embeddedFiles embed.FS

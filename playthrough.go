@@ -19,7 +19,7 @@ import (
 // Playthrough structure and translating it to the new one.
 // Out of the 3 versions (ReleaseVersion, SimulationVersion and InputVersion),
 // the InputVersion is the one expected to change the least often.
-const InputVersion = 1
+const InputVersion = 99
 
 // Playthrough represents all the input sent to a World during the execution
 // of a level. Given this input and a compatible simulation, the same output
